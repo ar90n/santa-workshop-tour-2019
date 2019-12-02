@@ -51,6 +51,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "0.12.5"
 
 [package.dependencies]
+lockfile = ">=0.9"
 msgpack = "*"
 requests = "*"
 
@@ -251,10 +252,9 @@ poetry = "0.12.17"
 tomlkit = "^0.5.8"
 
 [package.source]
-reference = "379f7df166403fc80423539934404177f4f020ae"
+reference = "0398187ceb297fa4f0858839cfaa7120c046e3b5"
 type = "git"
 url = "git@github.com:ar90n/kkt.git"
-
 [[package]]
 category = "main"
 description = "Linear Assignment Problem solver (LAPJV/LAPMOD)."
@@ -718,7 +718,7 @@ version = "0.6.0"
 more-itertools = "*"
 
 [metadata]
-content-hash = "8896a7a8653eb86b9672ebc2ce694aa33f70c3aabf495adc8fc9cd1aa5429787"
+content-hash = "1a8a4688439723fae23af7af4ceaa18b539f210c57368135fe5178683214be39"
 python-versions = "^3.6"
 
 [metadata.hashes]
