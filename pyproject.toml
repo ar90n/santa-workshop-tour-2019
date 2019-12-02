@@ -22,7 +22,7 @@ kernel_type = "script"
 is_private = true
 enable_gpu = false
 enable_internet = true
-kernel_data_sources = ["santa-workshop-tour-2019"]
+competition_sources = ["santa-workshop-tour-2019"]
 
 [tool.kkt]
 enable_git_tag = true
