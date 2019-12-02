@@ -1,34 +1,35 @@
 from santa_workshop_tour_2019 import io
-from santa_workshop_tour_2019.const import cols, days, MIN_OCCUPANCY, MAX_OCCUPANCY
+from santa_workshop_tour_2019.const import MAX_OCCUPANCY, MIN_OCCUPANCY, cols, days
 
 data = io.load_data()
 submission = io.load_sample_submission()
 
-family_size_dict = data[['n_people']].to_dict()['n_people']
+family_size_dict = data[["n_people"]].to_dict()["n_people"]
 choice_dict = data[cols].to_dict()
+
 
 def cost_function(prediction):
 
     penalty = 0
 
     # We'll use this to count the number of people scheduled each day
-    daily_occupancy = {k:0 for k in days}
-    
+    daily_occupancy = {k: 0 for k in days}
+
     # Looping over each family; d is the day for each family f
     for f, d in enumerate(prediction):
 
         # Using our lookup dictionaries to make simpler variable names
         n = family_size_dict[f]
-        choice_0 = choice_dict['choice_0'][f]
-        choice_1 = choice_dict['choice_1'][f]
-        choice_2 = choice_dict['choice_2'][f]
-        choice_3 = choice_dict['choice_3'][f]
-        choice_4 = choice_dict['choice_4'][f]
-        choice_5 = choice_dict['choice_5'][f]
-        choice_6 = choice_dict['choice_6'][f]
-        choice_7 = choice_dict['choice_7'][f]
-        choice_8 = choice_dict['choice_8'][f]
-        choice_9 = choice_dict['choice_9'][f]
+        choice_0 = choice_dict["choice_0"][f]
+        choice_1 = choice_dict["choice_1"][f]
+        choice_2 = choice_dict["choice_2"][f]
+        choice_3 = choice_dict["choice_3"][f]
+        choice_4 = choice_dict["choice_4"][f]
+        choice_5 = choice_dict["choice_5"][f]
+        choice_6 = choice_dict["choice_6"][f]
+        choice_7 = choice_dict["choice_7"][f]
+        choice_8 = choice_dict["choice_8"][f]
+        choice_9 = choice_dict["choice_9"][f]
 
         # add the family member count to the daily occupancy
         daily_occupancy[d] += n
@@ -65,24 +66,32 @@ def cost_function(prediction):
 
     # Calculate the accounting cost
     # The first day (day 100) is treated special
-    accounting_cost = (daily_occupancy[days[0]]-125.0) / 400.0 * daily_occupancy[days[0]]**(0.5)
+    accounting_cost = (
+        (daily_occupancy[days[0]] - 125.0) / 400.0 * daily_occupancy[days[0]] ** (0.5)
+    )
     # using the max function because the soft constraints might allow occupancy to dip below 125
     accounting_cost = max(0, accounting_cost)
-    
+
     # Loop over the rest of the days, keeping track of previous count
     yesterday_count = daily_occupancy[days[0]]
     for day in days[1:]:
         today_count = daily_occupancy[day]
         diff = abs(today_count - yesterday_count)
-        accounting_cost += max(0, (daily_occupancy[day]-125.0) / 400.0 * daily_occupancy[day]**(0.5 + diff / 50.0))
+        accounting_cost += max(
+            0,
+            (daily_occupancy[day] - 125.0)
+            / 400.0
+            * daily_occupancy[day] ** (0.5 + diff / 50.0),
+        )
         yesterday_count = today_count
 
     penalty += accounting_cost
 
     return penalty
 
+
 # Start with the sample submission values
-best = submission['assigned_day'].tolist()
+best = submission["assigned_day"].tolist()
 start_score = cost_function(best)
 
 new = best.copy()
@@ -90,14 +99,14 @@ new = best.copy()
 for fam_id, _ in enumerate(best):
     # loop over each family choice
     for pick in range(10):
-        day = choice_dict[f'choice_{pick}'][fam_id]
+        day = choice_dict[f"choice_{pick}"][fam_id]
         temp = new.copy()
-        temp[fam_id] = day # add in the new pick
+        temp[fam_id] = day  # add in the new pick
         if cost_function(temp) < start_score:
             new = temp.copy()
             start_score = cost_function(new)
 
-submission['assigned_day'] = new
+submission["assigned_day"] = new
 score = cost_function(new)
-submission.to_csv(f'submission_{score}.csv')
-print(f'Score: {score}')
+submission.to_csv(f"submission_{score}.csv")
+print(f"Score: {score}")

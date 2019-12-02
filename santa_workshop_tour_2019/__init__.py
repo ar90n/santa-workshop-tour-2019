@@ -1,2 +1,1 @@
-from . import io
-from . import const
+from . import const, io
