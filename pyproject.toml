@@ -6,8 +6,8 @@ authors = ["Masahiro Wada <argon.argon.argon@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.6"
-pandas = "^0.25.0"
-numba = "^0.46.0"
+pandas = "0.25.3"
+numba = "0.46.0"
 
 [tool.poetry.dev-dependencies]
 python-language-server = "^0.31.1"
