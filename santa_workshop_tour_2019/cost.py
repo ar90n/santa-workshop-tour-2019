@@ -156,3 +156,15 @@ def build_cost_function(data, N_DAYS=100, MAX_OCCUPANCY=300, MIN_OCCUPANCY=125):
     )
 
     return cost_function
+
+
+def get_weights(data, N_DAYS=100):
+    family_size = data.n_people.values
+    days_array = np.arange(N_DAYS, 0, -1)
+    choice_array_num = _build_choice_array(data, N_DAYS)
+    weights = _precompute_penalties(choice_array_num, family_size)
+    weights = weights[:, 1:].reshape(5000, 100, 1)
+    weights = np.tile(weights, (1, 1, 50))
+    weights = weights.reshape(5000, 5000)
+
+    return weights
