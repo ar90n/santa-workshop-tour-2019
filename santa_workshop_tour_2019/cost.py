@@ -2,30 +2,21 @@
 Reference:
     - https://www.kaggle.com/xhlulu/santa-s-2019-faster-cost-function-24-s
 """
-from functools import partial
+
+from .const import N_DAYS, MAX_OCCUPANCY
+
+from functools import partial, lru_cache
 
 from numba import njit
 import numpy as np
 import pandas as pd
 
 
-## Intermediate Helper Functions
-def _build_choice_array(data, n_days):
-    choice_matrix = data.loc[:, "choice_0":"choice_9"].values
-    choice_array_num = np.full((data.shape[0], n_days + 1), -1)
-
-    for i, choice in enumerate(choice_matrix):
-        for d, day in enumerate(choice):
-            choice_array_num[i, day] = d
-
-    return choice_array_num
-
-
-def _precompute_accounting(max_day_count, max_diff):
-    accounting_matrix = np.zeros((max_day_count + 1, max_diff + 1))
+def create_accounting_memo():
+    accounting_matrix = np.zeros((MAX_OCCUPANCY + 1, MAX_OCCUPANCY + 1))
     # Start day count at 1 in order to avoid division by 0
-    for today_count in range(1, max_day_count + 1):
-        for diff in range(max_diff + 1):
+    for today_count in range(MAX_OCCUPANCY + 1):
+        for diff in range(MAX_OCCUPANCY + 1):
             accounting_cost = (
                 (today_count - 125.0) / 400.0 * today_count ** (0.5 + diff / 50.0)
             )
@@ -34,7 +25,8 @@ def _precompute_accounting(max_day_count, max_diff):
     return accounting_matrix
 
 
-def _precompute_penalties(choice_array_num, family_size):
+def create_penalty_memo(data):
+    family_size = data.n_people.values
     penalties_array = np.array(
         [
             [
@@ -54,14 +46,14 @@ def _precompute_penalties(choice_array_num, family_size):
         ]
     )
 
-    penalty_matrix = np.zeros(choice_array_num.shape)
-    N = family_size.shape[0]
-    for i in range(N):
-        choice = choice_array_num[i]
-        n = family_size[i]
+    choice_matrix = data.loc[:, "choice_0":"choice_9"].values
 
-        for j in range(penalty_matrix.shape[1]):
-            penalty_matrix[i, j] = penalties_array[n, choice[j]]
+    N = family_size.shape[0]
+    penalty_matrix = penalties_array[family_size[range(N)], -1].reshape(
+        -1, 1
+    ) * np.ones(N_DAYS + 1)
+    for i in range(N):
+        penalty_matrix[i, choice_matrix[i]] = penalties_array[family_size[i], :-1]
 
     return penalty_matrix
 
@@ -71,11 +63,10 @@ def _compute_cost_fast(
     prediction,
     family_size,
     days_array,
-    penalty_matrix,
-    accounting_matrix,
-    MAX_OCCUPANCY,
-    MIN_OCCUPANCY,
-    N_DAYS,
+    penalty_memo,
+    accounting_memo,
+    max_occupancy,
+    min_occupancy,
 ):
     """
     Do not use this function. Please use `build_cost_function` instead to
@@ -92,14 +83,14 @@ def _compute_cost_fast(
         d = prediction[i]
 
         daily_occupancy[d] += n
-        penalty += penalty_matrix[i, d]
+        penalty += penalty_memo[i, d]
 
     # for each date, check total occupancy
     # (using soft constraints instead of hard constraints)
     # Day 0 does not exist, so we do not count it
     relevant_occupancy = daily_occupancy[1:]
     incorrect_occupancy = np.any(
-        (relevant_occupancy > MAX_OCCUPANCY) | (relevant_occupancy < MIN_OCCUPANCY)
+        (relevant_occupancy > max_occupancy) | (relevant_occupancy < min_occupancy)
     )
 
     if incorrect_occupancy:
@@ -117,15 +108,14 @@ def _compute_cost_fast(
     for day in days_array[1:]:
         today_count = daily_occupancy[day]
         diff = abs(today_count - yesterday_count)
-        accounting_cost += accounting_matrix[today_count, diff]
+        accounting_cost += accounting_memo[today_count, diff]
         yesterday_count = today_count
 
-    penalty += accounting_cost
+    total_cost = penalty + accounting_cost
+    return total_cost
 
-    return penalty
 
-
-def build_cost_function(data, N_DAYS=100, MAX_OCCUPANCY=300, MIN_OCCUPANCY=125):
+def build_cost_function(data, max_occupancy=300, min_occupancy=125):
     """
     data (pd.DataFrame):
         should be the df that contains family information. Preferably load it from "family_data.csv".
@@ -134,11 +124,8 @@ def build_cost_function(data, N_DAYS=100, MAX_OCCUPANCY=300, MIN_OCCUPANCY=125):
     days_array = np.arange(N_DAYS, 0, -1)
 
     # Precompute matrices needed for our cost function
-    choice_array_num = _build_choice_array(data, N_DAYS)
-    penalty_matrix = _precompute_penalties(choice_array_num, family_size)
-    accounting_matrix = _precompute_accounting(
-        max_day_count=MAX_OCCUPANCY, max_diff=MAX_OCCUPANCY
-    )
+    penalty_memo = create_penalty_memo(data)
+    accounting_memo = create_accounting_memo()
 
     # Partially apply `_compute_cost_fast` so that the resulting partially applied
     # function only requires prediction as input. E.g.
@@ -148,23 +135,10 @@ def build_cost_function(data, N_DAYS=100, MAX_OCCUPANCY=300, MIN_OCCUPANCY=125):
         _compute_cost_fast,
         family_size=family_size,
         days_array=days_array,
-        penalty_matrix=penalty_matrix,
-        accounting_matrix=accounting_matrix,
-        MAX_OCCUPANCY=MAX_OCCUPANCY,
-        MIN_OCCUPANCY=MIN_OCCUPANCY,
-        N_DAYS=N_DAYS,
+        penalty_memo=penalty_memo,
+        accounting_memo=accounting_memo,
+        max_occupancy=max_occupancy,
+        min_occupancy=min_occupancy,
     )
 
     return cost_function
-
-
-def get_weights(data, N_DAYS=100):
-    family_size = data.n_people.values
-    days_array = np.arange(N_DAYS, 0, -1)
-    choice_array_num = _build_choice_array(data, N_DAYS)
-    weights = _precompute_penalties(choice_array_num, family_size)
-    weights = weights[:, 1:].reshape(5000, 100, 1)
-    weights = np.tile(weights, (1, 1, 50))
-    weights = weights.reshape(5000, 5000)
-
-    return weights
