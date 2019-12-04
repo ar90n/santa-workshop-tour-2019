@@ -16,10 +16,12 @@ pyls-black = "^0.4.4"
 pyls-mypy = "^0.1.8"
 kkt = {git = "git@github.com:ar90n/kkt.git"}
 pre-commit = "^1.20"
+jupyter = "^1.0"
+streamlit = "^0.51.0"
 
 [tool.kkt.meta_data]
 slug = "santa-2019"
-code_file = "main.py"
+code_file = "./scripts/main.py"
 kernel_type = "script"
 is_private = true
 enable_gpu = false
