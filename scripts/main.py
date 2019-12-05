@@ -6,7 +6,11 @@ from santa_workshop_tour_2019.optim import greedy
 
 data = io.load_data()
 
-best = solve_lap(data)
+import numpy as np
+occupancies = np.zeros(101, dtype=np.int)
+occupancies[1:] = 50
+best = solve_lap(data, occupancies)
+
 
 i = 0
 choice_dict = data[cols].to_dict()
