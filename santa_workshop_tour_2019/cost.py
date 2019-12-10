@@ -5,11 +5,8 @@ Reference:
 
 from .const import N_DAYS, MAX_OCCUPANCY
 
-from functools import partial, lru_cache
-
 from numba import njit
 import numpy as np
-import pandas as pd
 
 
 def create_accounting_memo():
@@ -59,7 +56,25 @@ def create_penalty_memo(data):
 
 
 @njit
-def _compute_cost_fast(
+def _acc_prediction(prediction, family_size, penalty_memo):
+    N = family_size.shape[0]
+    days_array = np.arange(N_DAYS, 0, -1)
+    # We'll use this to count the number of people scheduled each day
+    daily_occupancy = np.zeros(len(days_array) + 1, dtype=np.int64)
+    penalty = 0
+
+    # Looping over each family; d is the day, n is size of that family
+    for i in range(N):
+        n = family_size[i]
+        d = prediction[i]
+
+        daily_occupancy[d] += n
+        penalty += penalty_memo[i, d]
+    return daily_occupancy, penalty
+
+
+@njit
+def _total_cost(
     prediction,
     family_size,
     days_array,
@@ -73,17 +88,7 @@ def _compute_cost_fast(
     build your own "cost_function".
     """
     N = family_size.shape[0]
-    # We'll use this to count the number of people scheduled each day
-    daily_occupancy = np.zeros(len(days_array) + 1, dtype=np.int64)
-    penalty = 0
-
-    # Looping over each family; d is the day, n is size of that family
-    for i in range(N):
-        n = family_size[i]
-        d = prediction[i]
-
-        daily_occupancy[d] += n
-        penalty += penalty_memo[i, d]
+    daily_occupancy, penalty = _acc_prediction(prediction, family_size, penalty_memo)
 
     # for each date, check total occupancy
     # (using soft constraints instead of hard constraints)
@@ -115,11 +120,115 @@ def _compute_cost_fast(
     return total_cost
 
 
+@njit
+def _partial_accounting_cost(
+    daily_occupancy, today, diff_today, diff_yesterday, accounting_memo
+):
+    if today <= 0:
+        return 0
+
+    today_count = daily_occupancy[today] + diff_today
+    if (today_count < 125) or (300 < today_count):
+        return 100000000
+
+    if (today + 1) < len(daily_occupancy):
+        yesterday_count = daily_occupancy[today + 1] + diff_yesterday
+    else:
+        yesterday_count = today_count
+    diff_count = abs(today_count - yesterday_count)
+    return accounting_memo[today_count, diff_count]
+
+
+@njit
+def _delta_swap_cost(daily_occupancy, d1, d2, c1, c2, penalty_memo, accounting_memo):
+    if d1 < d2:
+        major_day = d2
+        minor_day = d1
+        major_diff = c1 - c2
+        minor_diff = c2 - c1
+    else:
+        major_day = d1
+        minor_day = d2
+        major_diff = c2 - c1
+        minor_diff = c1 - c2
+
+    new = 0
+    old = 0
+
+    new += _partial_accounting_cost(
+        daily_occupancy, minor_day - 1, 0, minor_diff, accounting_memo
+    )
+    old += _partial_accounting_cost(
+        daily_occupancy, minor_day - 1, 0, 0, accounting_memo
+    )
+
+    new += _partial_accounting_cost(
+        daily_occupancy, major_day, major_diff, 0, accounting_memo
+    )
+    old += _partial_accounting_cost(daily_occupancy, major_day, 0, 0, accounting_memo)
+
+    if (minor_day + 1) == major_day:
+        new += _partial_accounting_cost(
+            daily_occupancy, minor_day, minor_diff, major_diff, accounting_memo
+        )
+        old += _partial_accounting_cost(
+            daily_occupancy, minor_day, 0, 0, accounting_memo
+        )
+    else:
+        new += _partial_accounting_cost(
+            daily_occupancy, minor_day, minor_diff, 0, accounting_memo
+        )
+        old += _partial_accounting_cost(
+            daily_occupancy, minor_day, 0, 0, accounting_memo
+        )
+        new += _partial_accounting_cost(
+            daily_occupancy, major_day - 1, 0, major_diff, accounting_memo
+        )
+        old += _partial_accounting_cost(
+            daily_occupancy, major_day - 1, 0, 0, accounting_memo
+        )
+    return old, new
+
+
+@njit
+def _delta_move_family_cost(
+    prediction, daily_occupancy, f, dst_day, family_size, penalty_memo, accounting_memo
+):
+    src_day = prediction[f]
+    if src_day == dst_day:
+        return 0
+
+    cp = family_size[f]
+
+    old, new = _delta_swap_cost(
+        daily_occupancy, src_day, dst_day, cp, 0, penalty_memo, accounting_memo
+    )
+    old += penalty_memo[f, src_day]
+    new += penalty_memo[f, dst_day]
+    return new - old
+
+
+@njit
+def _delta_swap_family_cost(
+    prediction, daily_occupancy, f1, f2, family_size, penalty_memo, accounting_memo
+):
+    d1 = prediction[f1]
+    d2 = prediction[f2]
+    if d1 == d2:
+        return 0
+
+    c1 = family_size[f1]
+    c2 = family_size[f2]
+
+    old, new = _delta_swap_cost(
+        daily_occupancy, d1, d2, c1, c2, penalty_memo, accounting_memo
+    )
+    old += penalty_memo[f1, d1] + penalty_memo[f2, d2]
+    new += penalty_memo[f1, d2] + penalty_memo[f2, d1]
+    return new - old
+
+
 def build_cost_function(data, max_occupancy=300, min_occupancy=125):
-    """
-    data (pd.DataFrame):
-        should be the df that contains family information. Preferably load it from "family_data.csv".
-    """
     family_size = data.n_people.values
     days_array = np.arange(N_DAYS, 0, -1)
 
@@ -127,18 +236,40 @@ def build_cost_function(data, max_occupancy=300, min_occupancy=125):
     penalty_memo = create_penalty_memo(data)
     accounting_memo = create_accounting_memo()
 
-    # Partially apply `_compute_cost_fast` so that the resulting partially applied
-    # function only requires prediction as input. E.g.
-    # Non partial applied: score = _compute_cost_fast(prediction, family_size, days_array, ...)
-    # Partially applied: score = cost_function(prediction)
-    cost_function = partial(
-        _compute_cost_fast,
-        family_size=family_size,
-        days_array=days_array,
-        penalty_memo=penalty_memo,
-        accounting_memo=accounting_memo,
-        max_occupancy=max_occupancy,
-        min_occupancy=min_occupancy,
-    )
+    @njit
+    def total_cost(prediction):
+        return _total_cost(
+            prediction,
+            family_size=family_size,
+            days_array=days_array,
+            penalty_memo=penalty_memo,
+            accounting_memo=accounting_memo,
+            max_occupancy=max_occupancy,
+            min_occupancy=min_occupancy,
+        )
 
-    return cost_function
+    @njit
+    def delta_move_cost(prediction, daily_occupancy, f, dst_day):
+        return _delta_move_family_cost(
+            prediction,
+            daily_occupancy,
+            f,
+            dst_day,
+            family_size,
+            penalty_memo,
+            accounting_memo,
+        )
+
+    @njit
+    def delta_swap_cost(prediction, daily_occupancy, f1, f2):
+        return _delta_swap_family_cost(
+            prediction,
+            daily_occupancy,
+            f1,
+            f2,
+            family_size,
+            penalty_memo,
+            accounting_memo,
+        )
+
+    return total_cost, delta_move_cost, delta_swap_cost
