@@ -85,7 +85,6 @@ def build_family_size_lap(data):
     return _family_size_lap
 
 
-
 def build_non_adj_family_lap(data):
     family_size = data.n_people.values
     penalty_memo = create_penalty_memo(data)
@@ -96,7 +95,7 @@ def build_non_adj_family_lap(data):
         new = prediction.copy()
         daily_occupancy = daily_occupancy.copy()
 
-        days = set(range(1,101))
+        days = set(range(1, 101))
         fam_ids = []
         while 0 < len(days):
             focus_day = random.choice(tuple(days))
@@ -105,9 +104,9 @@ def build_non_adj_family_lap(data):
 
             days.remove(focus_day)
             if focus_day - 1 in days:
-                days.remove(focus_day-1)
+                days.remove(focus_day - 1)
             if focus_day + 1 in days:
-                days.remove(focus_day+1)
+                days.remove(focus_day + 1)
 
         weights = np.zeros((len(fam_ids), len(fam_ids)), dtype=np.int64)
         for i in range(len(fam_ids)):
@@ -117,7 +116,15 @@ def build_non_adj_family_lap(data):
                 di = prediction[idi]
                 dj = prediction[idj]
                 diff_size = family_size[idi] - family_size[idj]
-                weights[i, j] = penalty_memo[idi, dj] + _partial_accounting_cost(daily_occupancy, dj, diff_size, 0, accounting_memo) + _partial_accounting_cost(daily_occupancy, dj - 1, 0, diff_size, accounting_memo)
+                weights[i, j] = (
+                    penalty_memo[idi, dj]
+                    + _partial_accounting_cost(
+                        daily_occupancy, dj, diff_size, 0, accounting_memo
+                    )
+                    + _partial_accounting_cost(
+                        daily_occupancy, dj - 1, 0, diff_size, accounting_memo
+                    )
+                )
 
         _, col, _ = lapjv(weights)
         for i in range(len(col)):
@@ -127,4 +134,3 @@ def build_non_adj_family_lap(data):
         return new, daily_occupancy
 
     return _non_adj_family_lap
-

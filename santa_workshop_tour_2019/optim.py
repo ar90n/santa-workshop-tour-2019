@@ -76,7 +76,7 @@ def stochastic_product_search(
 ):
     """
     original (np.array): The original day assignments.
-    
+
     At every iterations, randomly sample fam_size families. Then, given their top_k
     choices, compute the Cartesian product of the families' choices, and compute the
     score for each of those top_k^fam_size products.
