@@ -12,6 +12,7 @@ from santa_workshop_tour_2019.optim import (
     build_greedy_swap_func,
     stochastic_product_search,
 )
+from santa_workshop_tour_2019.lp_mip import solveSanta
 
 data = io.load_data()
 
@@ -24,10 +25,15 @@ family_size_lap = build_family_size_lap(data)
 non_adj_family_lap = build_non_adj_family_lap(data)
 
 i = 0
-best, daily_occupancy = family_lap(FLAT_SLOTS)
+best = solveSanta()
+family_size = data.n_people.values
+daily_occupancy = np.zeros(101, dtype=np.int64)
+for j in range(len(best)):
+    daily_occupancy[best[j]] += family_size[j]
 score = total_cost(best)
 best_score = score
-while i <= 128:
+print(f"Score0: {score}")
+while i <= 256:
     best, daily_occupancy = greedy_move(best, daily_occupancy)
     score = total_cost(best)
     print(f"Score0: {score}")
