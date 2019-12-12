@@ -99,7 +99,7 @@ def _total_cost(
     )
 
     if incorrect_occupancy:
-        return 100000000
+        return 100000000, daily_occupancy
 
     # Calculate the accounting cost
     # The first day (day 100) is treated special
@@ -117,7 +117,7 @@ def _total_cost(
         yesterday_count = today_count
 
     total_cost = penalty + accounting_cost
-    return total_cost
+    return total_cost, daily_occupancy
 
 
 @njit

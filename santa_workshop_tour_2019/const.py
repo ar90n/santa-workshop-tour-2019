@@ -1,6 +1,7 @@
 import numpy as np
 
 N_DAYS = 100
+N_FAMILIES = 5000
 MAX_OCCUPANCY = 300
 MIN_OCCUPANCY = 125
 
