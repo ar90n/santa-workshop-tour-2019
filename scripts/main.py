@@ -24,7 +24,8 @@ best = lp_mip()
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
-while i <= 256:
+
+while i <= 32:
    best, daily_occupancy = greedy_move(best, daily_occupancy)
    score, daily_occupancy = total_cost(best)
    print(f"Score1: {score}")
@@ -33,11 +34,13 @@ while i <= 256:
    score, daily_occupancy = total_cost(best)
    print(f"Score2: {score}")
 
-   best = family_size_lap(best)
+   for s in range(2, 9):
+       for j in range(2):
+           best = family_size_lap(best, s)
    score, daily_occupancy = total_cost(best)
    print(f"Score3: {score}")
 
-   for j in range(2048):
+   for j in range(128):
        best, daily_occupancy = non_adj_family_lap(best, daily_occupancy)
    score, daily_occupancy = total_cost(best)
    print(f"Score4: {score}")
