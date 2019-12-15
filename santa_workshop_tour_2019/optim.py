@@ -10,7 +10,7 @@ def build_greedy_move_func(data, delta_move_cost_func):
     family_size = data.n_people.values
     choice_mat = data[cols].values
 
-    @njit
+    @njit(fastmath=True)
     def _greedy_move_impl(best, daily_occupancy):
         # loop over each family
         new = best.copy()
@@ -33,7 +33,7 @@ def build_greedy_move_func(data, delta_move_cost_func):
 def build_greedy_swap_func(data, delta_swap_cost_func):
     family_size = data.n_people.values
 
-    @njit
+    @njit(fastmath=True)
     def _greedy_swap_impl(best, daily_occupancy):
         new = best.copy()
         daily_occupancy = daily_occupancy.copy()

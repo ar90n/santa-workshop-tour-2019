@@ -26,27 +26,27 @@ best_score = score
 print(f"Score0: {score}")
 
 while i <= 32:
-   best, daily_occupancy = greedy_move(best, daily_occupancy)
-   score, daily_occupancy = total_cost(best)
-   print(f"Score1: {score}")
+    best, daily_occupancy = greedy_move(best, daily_occupancy)
+    score, daily_occupancy = total_cost(best)
+    print(f"Score1: {score}")
 
-   best, daily_occupancy = greedy_swap(best, daily_occupancy)
-   score, daily_occupancy = total_cost(best)
-   print(f"Score2: {score}")
+    best, daily_occupancy = greedy_swap(best, daily_occupancy)
+    score, daily_occupancy = total_cost(best)
+    print(f"Score2: {score}")
 
-   for s in range(2, 9):
-       for j in range(2):
-           best = family_size_lap(best, s)
-   score, daily_occupancy = total_cost(best)
-   print(f"Score3: {score}")
+    for s in range(2, 9):
+        for j in range(2):
+            best = family_size_lap(best, s)
+    score, daily_occupancy = total_cost(best)
+    print(f"Score3: {score}")
 
-   for j in range(128):
-       best, daily_occupancy = non_adj_family_lap(best, daily_occupancy)
-   score, daily_occupancy = total_cost(best)
-   print(f"Score4: {score}")
+    for j in range(128):
+        best, daily_occupancy = non_adj_family_lap(best, daily_occupancy)
+    score, daily_occupancy = total_cost(best)
+    print(f"Score4: {score}")
 
-   i += 1
+    i += 1
 
-   if score < best_score:
-       best_score = score
-       io.save_result(best, score)
+    if score < best_score:
+        best_score = score
+        io.save_result(best, score)

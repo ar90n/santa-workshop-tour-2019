@@ -55,7 +55,7 @@ def create_penalty_memo(data):
     return penalty_matrix
 
 
-@njit
+@njit(fastmath=True)
 def _acc_prediction(prediction, family_size, penalty_memo):
     N = family_size.shape[0]
     days_array = np.arange(N_DAYS, 0, -1)
@@ -73,7 +73,7 @@ def _acc_prediction(prediction, family_size, penalty_memo):
     return daily_occupancy, penalty
 
 
-@njit
+@njit(fastmath=True)
 def _total_cost(
     prediction,
     family_size,
@@ -120,7 +120,7 @@ def _total_cost(
     return total_cost, daily_occupancy
 
 
-@njit
+@njit(fastmath=True)
 def _partial_accounting_cost(
     daily_occupancy, today, diff_today, diff_yesterday, accounting_memo
 ):
@@ -139,7 +139,7 @@ def _partial_accounting_cost(
     return accounting_memo[today_count, diff_count]
 
 
-@njit
+@njit(fastmath=True)
 def _delta_swap_cost(daily_occupancy, d1, d2, c1, c2, penalty_memo, accounting_memo):
     if d1 < d2:
         major_day = d2
@@ -190,7 +190,7 @@ def _delta_swap_cost(daily_occupancy, d1, d2, c1, c2, penalty_memo, accounting_m
     return old, new
 
 
-@njit
+@njit(fastmath=True)
 def _delta_move_family_cost(
     prediction, daily_occupancy, f, dst_day, family_size, penalty_memo, accounting_memo
 ):
@@ -208,7 +208,7 @@ def _delta_move_family_cost(
     return new - old
 
 
-@njit
+@njit(fastmath=True)
 def _delta_swap_family_cost(
     prediction, daily_occupancy, f1, f2, family_size, penalty_memo, accounting_memo
 ):
@@ -236,7 +236,7 @@ def build_cost_function(data, max_occupancy=300, min_occupancy=125):
     penalty_memo = create_penalty_memo(data)
     accounting_memo = create_accounting_memo()
 
-    @njit
+    @njit(fastmath=True)
     def total_cost(prediction):
         return _total_cost(
             prediction,
@@ -248,7 +248,7 @@ def build_cost_function(data, max_occupancy=300, min_occupancy=125):
             min_occupancy=min_occupancy,
         )
 
-    @njit
+    @njit(fastmath=True)
     def delta_move_cost(prediction, daily_occupancy, f, dst_day):
         return _delta_move_family_cost(
             prediction,
@@ -260,7 +260,7 @@ def build_cost_function(data, max_occupancy=300, min_occupancy=125):
             accounting_memo,
         )
 
-    @njit
+    @njit(fastmath=True)
     def delta_swap_cost(prediction, daily_occupancy, f1, f2):
         return _delta_swap_family_cost(
             prediction,

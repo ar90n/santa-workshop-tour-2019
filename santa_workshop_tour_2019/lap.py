@@ -22,12 +22,12 @@ def group_by_day(prediction):
     return {k: np.array(v, dtype=np.int64) for k, v in fams.items()}
 
 
-
 def _concat_source_ids(id_groups, target_size):
     target_sizes = [*range(2, target_size - 1), target_size]
     concat_ids = sum((id_groups.get(size, []) for size in target_sizes), [])
     random.shuffle(concat_ids)
     return concat_ids
+
 
 def _create_specified_family_size_groups(fam_ids, family_size, dst_size):
     fam_id_groups = group_by_family_size(fam_ids, family_size)
@@ -48,7 +48,7 @@ def _create_specified_family_size_groups(fam_ids, family_size, dst_size):
     return list(qs[dst_size])
 
 
-@njit
+@njit(fastmath=True)
 def _calc_days(occupancies, col, l):
     acc = np.cumsum(occupancies)
     best = np.zeros(l, dtype=np.int64)
