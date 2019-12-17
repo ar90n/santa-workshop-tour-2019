@@ -3,7 +3,7 @@ Reference:
     - https://www.kaggle.com/xhlulu/santa-s-2019-faster-cost-function-24-s
 """
 
-from .const import N_DAYS, MAX_OCCUPANCY
+from .const import N_DAYS, MIN_OCCUPANCY, MAX_OCCUPANCY
 
 from numba import njit
 import numpy as np
@@ -13,11 +13,16 @@ def create_accounting_memo():
     accounting_matrix = np.zeros((MAX_OCCUPANCY + 1, MAX_OCCUPANCY + 1))
     # Start day count at 1 in order to avoid division by 0
     for today_count in range(MAX_OCCUPANCY + 1):
-        for diff in range(MAX_OCCUPANCY + 1):
-            accounting_cost = (
-                (today_count - 125.0) / 400.0 * today_count ** (0.5 + diff / 50.0)
-            )
-            accounting_matrix[today_count, diff] = max(0, accounting_cost)
+        for yesterday_count in range(MAX_OCCUPANCY + 1):
+            if today_count < MIN_OCCUPANCY or MAX_OCCUPANCY < today_count:
+                exceeding_count = max(MIN_OCCUPANCY - today_count, today_count - MAX_OCCUPANCY)
+                accounting_matrix[today_count, yesterday_count] = 10000000 * exceeding_count
+            else:
+                diff = abs(today_count - yesterday_count)
+                accounting_cost = (
+                    (today_count - 125.0) / 400.0 * today_count ** (0.5 + diff / 50.0)
+                )
+                accounting_matrix[today_count, yesterday_count] = max(0, accounting_cost)
 
     return accounting_matrix
 
@@ -112,8 +117,7 @@ def _total_cost(
     yesterday_count = init_occupancy
     for day in days_array[1:]:
         today_count = daily_occupancy[day]
-        diff = abs(today_count - yesterday_count)
-        accounting_cost += accounting_memo[today_count, diff]
+        accounting_cost += accounting_memo[today_count, yesterday_count]
         yesterday_count = today_count
 
     total_cost = penalty + accounting_cost
@@ -135,8 +139,7 @@ def _partial_accounting_cost(
         yesterday_count = daily_occupancy[today + 1] + diff_yesterday
     else:
         yesterday_count = today_count
-    diff_count = abs(today_count - yesterday_count)
-    return accounting_memo[today_count, diff_count]
+    return accounting_memo[today_count, yesterday_count]
 
 
 @njit(fastmath=True)
