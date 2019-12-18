@@ -81,7 +81,7 @@ def solveSantaLP(DESIRED, family_size, penalty_memo):
 
 
 def solveSantaIP(
-    DESIRED, families, family_size, penalty_memo, min_occupancy, max_occupancy
+    DESIRED, families, daily_occupancy, family_size, penalty_memo, accounting_memo
 ):
 
     S = pywraplp.Solver(
@@ -103,9 +103,22 @@ def solveSantaIP(
             candidates[j].append(i)
             x[i, j] = S.BoolVar("x[%i,%i]" % (i, j))
 
-    daily_occupancy = [
-        S.Sum([x[i, j] * family_size[i] for i in candidates[j]]) for j in range(N_DAYS)
-    ]
+    y = {}
+    for i, cs in enumerate(candidates):
+        if len(cs) == 0:
+            continue
+        for j in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+            for k in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+                y[i, j, k] = S.BoolVar("y[%i,%i,%i]" % (i, j, k))
+
+    occupancy = list(daily_occupancy.copy())
+    #for fam_id in families:
+    #    occupancy[prediction[fam_id]] -= family_size[fam_id]
+
+    for d in range(N_DAYS):
+        occupancy[d] += S.Sum([x[i, d] * family_size[i] for i in candidates[d]])
+    occupancy.append(occupancy[-1])
+
 
     family_presence = [S.Sum([x[i, j] for j in DESIRED[i, :]]) for i in families]
 
@@ -114,7 +127,16 @@ def solveSantaIP(
         [penalty_memo[i, j + 1] * x[i, j] for i in families for j in DESIRED[i, :]]
     )
 
-    S.Minimize(preference_cost)
+    accounting_cost = S.Sum(
+        [
+            accounting_memo[u, v] * y[d, u, v]
+            for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+            for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+            for d, cs in enumerate(candidates) if 0 < len(cs)
+        ]
+    )
+
+    S.Minimize(preference_cost + accounting_cost)
 
     # Constraints
 
@@ -122,8 +144,43 @@ def solveSantaIP(
         S.Add(family_presence[i] == 1)
 
     for j in range(N_DAYS):
-        S.Add(daily_occupancy[j] >= min_occupancy[j])
-        S.Add(daily_occupancy[j] <= max_occupancy[j])
+        S.Add(occupancy[j] >= MIN_OCCUPANCY)
+        S.Add(occupancy[j] <= MAX_OCCUPANCY)
+
+    for d, cs in enumerate(candidates):
+        if len(cs) == 0:
+            continue
+        y_sum_u = S.Sum(
+            [
+                y[d, u, v] * u
+                for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+                for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+            ]
+        )
+        S.Add(y_sum_u == occupancy[d])
+
+        y_sum_v = S.Sum(
+            [
+                y[d, u, v] * v
+                for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+                for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+            ]
+        )
+        S.Add(y_sum_v == occupancy[d + 1])
+
+        y_sum = S.Sum(
+            [y[d, u, v] for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1) for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)]
+        )
+        S.Add(y_sum == 1)
+
+    for d, cs in enumerate(candidates[:-1]):
+        if len(cs) == 0:
+            continue
+        for t in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+            y_sum_u = S.Sum([y[d, u, t] for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)])
+            if 0 < len(candidates[(d + 1)]):
+                y_sum_v = S.Sum([y[d + 1, t, v] for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)])
+                S.Add(y_sum_u == y_sum_v)
 
     res = S.Solve()
 
@@ -151,6 +208,7 @@ def build_lp_mip(data):
     family_size = data.n_people.values
     DESIRED = data.values[:, :-1] - 1
     penalty_memo = create_penalty_memo(data)
+    accounting_memo = create_accounting_memo()
 
     def solveSanta():
         df = solveSantaLP(
@@ -168,8 +226,9 @@ def build_lp_mip(data):
         min_occupancy = np.array([max(0, MIN_OCCUPANCY - o) for o in occupancy])
         max_occupancy = np.array([MAX_OCCUPANCY - o for o in occupancy])
 
+
         rdf = solveSantaIP(
-            DESIRED, unassigned, family_size, penalty_memo, min_occupancy, max_occupancy
+            DESIRED, unassigned, occupancy, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
         df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
             "family_id"
