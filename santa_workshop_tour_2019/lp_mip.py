@@ -94,6 +94,7 @@ def _add_penalty_candidates(S, DESIRED):
     return x, candidates
 
 def _add_accounting_candidates(S, candidates, th, accounting_memo):
+    import math
     y = {}
     for j in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
         for k in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
@@ -264,7 +265,7 @@ def build_lp_mip(data):
         max_occupancy = np.array([MAX_OCCUPANCY - o for o in occupancy])
 
         rdf = solveSantaIP(
-            predictions, DESIRED, occupancy, 4096, family_size, penalty_memo, accounting_memo
+            predictions, DESIRED, occupancy, 8192, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
         df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
             "family_id"
