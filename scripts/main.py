@@ -24,6 +24,7 @@ best = lp_mip()
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
+io.save_result(best, score)
 
 #while i <= 32:
 #    best, daily_occupancy = greedy_move(best, daily_occupancy)
