@@ -6,7 +6,7 @@ from .cost import create_penalty_memo, create_accounting_memo
 
 #N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY = 5, 10, 8, 2
 
-def solveSantaLP(DESIRED, family_size, penalty_memo):
+def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
 
     S = pywraplp.Solver(
         "SolveAssignmentProblem", pywraplp.Solver.GLOP_LINEAR_PROGRAMMING
@@ -15,46 +15,19 @@ def solveSantaLP(DESIRED, family_size, penalty_memo):
     # S.SetNumThreads(NumThreads)
     # S.set_time_limit(limit_in_seconds*1000*NumThreads) #cpu time = wall time * N_threads
 
-    x = {}
-    candidates = [
-        [] for _ in range(N_DAYS)
-    ]  # families that can be assigned to each day
+    x, candidates = _add_penalty_candidates(S, DESIRED)
+    occupancy = _calc_occupancy(S, x, {}, [0] * len(family_size), candidates, family_size)
 
-    for i, days in DESIRED.items():
-        for j in days:
-            candidates[j].append(i)
-            x[i, j] = S.BoolVar("x[%i,%i]" % (i, j))
-
-    daily_occupancy = [
-        S.Sum([x[i, j] * family_size[i] for i in candidates[j]]) for j in range(N_DAYS)
-    ]
-
-    family_presence = [
-        S.Sum([x[i, j] for j in days]) for i, days in DESIRED.items()
-    ]
-
-    # Objective
-    preference_cost = S.Sum(
-        [
-            penalty_memo[i, j + 1] * x[i, j]
-            for i, days in DESIRED.items()
-            for j in days
-        ]
-    )
-
+    # 
+    preference_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
     S.Minimize(preference_cost)
 
     # Constraints
     for j in range(N_DAYS - 1):
-        S.Add(daily_occupancy[j] - daily_occupancy[j + 1] <= 23)
-        S.Add(daily_occupancy[j + 1] - daily_occupancy[j] <= 23)
-
-    for i in range(N_FAMILIES):
-        S.Add(family_presence[i] == 1)
-
-    for j in range(N_DAYS):
-        S.Add(daily_occupancy[j] >= MIN_OCCUPANCY)
-        S.Add(daily_occupancy[j] <= MAX_OCCUPANCY)
+        S.Add(occupancy[j] - occupancy[j + 1] <= 23)
+        S.Add(occupancy[j + 1] - occupancy[j] <= 23)
+    _add_family_presence_constraint(S, x, DESIRED)
+    _add_occupancy_constraint(S, occupancy)
 
     res = S.Solve()
 
@@ -94,7 +67,6 @@ def _add_penalty_candidates(S, DESIRED):
     return x, candidates
 
 def _add_accounting_candidates(S, candidates, th, accounting_memo):
-    import math
     y = {}
     for j in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
         for k in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
@@ -137,6 +109,30 @@ def _add_occupancy_constraint(S, occupancy):
         S.Add(occupancy[j] >= MIN_OCCUPANCY)
         S.Add(occupancy[j] <= MAX_OCCUPANCY)
 
+
+
+def _add_accounting_constraint2(S, y, occupancy):
+    for d, yd in y.items():
+        y_sum_u = S.Sum(
+            [
+                yv * u for (u, _), yv in yd.items()
+            ]
+        )
+        #S.Add(y_sum_u == occupancy[d])
+        S.Add(y_sum_u - occupancy[d] <= 1.0)
+        S.Add(occupancy[d] - y_sum_u <= 1.0)
+
+        y_sum_v = S.Sum(
+            [
+                yv * v for (_, v), yv in yd.items()
+            ]
+        )
+        #S.Add(y_sum_v == occupancy[d + 1])
+        S.Add(y_sum_v - occupancy[d + 1] <= 1.0)
+        S.Add(occupancy[d + 1] - y_sum_v <= 1.0)
+
+        y_sum = S.Sum(yd.values())
+        S.Add(y_sum == 1)
 
 def _add_accounting_constraint(S, y, occupancy):
     for d, yd in y.items():
@@ -249,7 +245,7 @@ def build_lp_mip(data):
 
     def solveSanta():
         df = solveSantaLP(
-            DESIRED, family_size, penalty_memo
+            DESIRED, family_size, penalty_memo, accounting_memo
         )  # Initial solution for most of families
         THRS = 0.999
 
@@ -265,7 +261,7 @@ def build_lp_mip(data):
         max_occupancy = np.array([MAX_OCCUPANCY - o for o in occupancy])
 
         rdf = solveSantaIP(
-            predictions, DESIRED, occupancy, 8192, family_size, penalty_memo, accounting_memo
+            predictions, DESIRED, occupancy, 65536, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
         df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
             "family_id"

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import random
 from ortools.linear_solver import pywraplp
-from santa_workshop_tour_2019.lp_mip import solveSantaIP
+from santa_workshop_tour_2019.lp_mip import solveSantaIP, solveSantaLP
 
 np.random.seed(2019)
 
@@ -45,5 +45,6 @@ for fam_id in target_families:
 
 print(DESIRED)
 #df = solveSantaIP(DESIRED, list(range(N_FAMILIES)), INITIAL_OCCUPACY, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
-df = solveSantaIP(prediction, DESIRED, INITIAL_OCCUPACY, 6, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
+#df = solveSantaIP(prediction, DESIRED, INITIAL_OCCUPACY, 4, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
+df = solveSantaLP(DESIRED, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
 print(df)
