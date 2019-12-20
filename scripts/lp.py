@@ -25,26 +25,23 @@ INITIAL_ASSIGN = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]
 #random.shuffle(INITIAL_ASSIGN)
 
 INITIAL_OCCUPACY = np.zeros(N_DAYS, dtype=np.int64)
-#for i, d in enumerate(INITIAL_ASSIGN):
-#    INITIAL_OCCUPACY[d] += FAMILY_SIZE[i]
-
-
-
+for i, d in enumerate(INITIAL_ASSIGN):
+    INITIAL_OCCUPACY[d] += FAMILY_SIZE[i]
 
 print(INITIAL_OCCUPACY, FAMILY_SIZE)
 #df = solveSantaLP(INITIAL_ASSIGN, list(range(N_DAYS)), INITIAL_OCCUPACY, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
 #df = solveSantaLP(INITIAL_ASSIGN, list(range(N_FAMILIES)), INITIAL_OCCUPACY, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
 #df = solveSantaLP(INITIAL_ASSIGN, list(range(N_FAMILIES)), INITIAL_OCCUPACY, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
-_DESIRED = np.arange(N_DAYS).reshape(1, -1).repeat(N_FAMILIES, axis=0)
-target_families = [0, 2, 3, 5, 8, 9]
+_DESIRED = np.array([0, 1, 3, 4], dtype=np.int64).reshape(1, -1).repeat(N_FAMILIES, axis=0)
+target_families = [0, 1, 2, 3, 8, 9]
 DESIRED = {}
 prediction = {}
 for fam_id in target_families:
     DESIRED[fam_id] = list(_DESIRED[fam_id])
-    prediction[fam_id] = None
+    prediction[fam_id] = INITIAL_ASSIGN[fam_id]
 
 print(DESIRED)
 #df = solveSantaIP(DESIRED, list(range(N_FAMILIES)), INITIAL_OCCUPACY, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
-#df = solveSantaIP(prediction, DESIRED, INITIAL_OCCUPACY, 4, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
-df = solveSantaLP(DESIRED, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
+df = solveSantaIP(prediction, DESIRED, INITIAL_OCCUPACY, 4, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
+#df = solveSantaLP(DESIRED, FAMILY_SIZE, PREFERENCE, ACCOUNTING)
 print(df)

@@ -27,7 +27,7 @@ def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
         S.Add(occupancy[j] - occupancy[j + 1] <= 23)
         S.Add(occupancy[j + 1] - occupancy[j] <= 23)
     _add_family_presence_constraint(S, x, DESIRED)
-    _add_occupancy_constraint(S, occupancy)
+    _add_occupancy_constraint(S, candidates, occupancy)
 
     res = S.Solve()
 
@@ -56,28 +56,22 @@ def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
 
 def _add_penalty_candidates(S, DESIRED):
     x = {}
-    candidates = [
-        [] for _ in range(N_DAYS)
-    ]  # families that can be assigned to each day
+    candidates = {}
 
     for i, days in DESIRED.items():
         for j in days:
-            candidates[j].append(i)
+            candidates.setdefault(j, []).append(i)
             x[i, j] = S.BoolVar("x[%i,%i]" % (i, j))
     return x, candidates
 
-def _add_accounting_candidates(S, candidates, th, accounting_memo):
+def _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo):
     y = {}
-    for j in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
-        for k in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
-            if th < accounting_memo[j, k]:
-                continue
-            for i, cs in enumerate(candidates):
-                if len(cs) == 0:
-                    continue
-                if i not in y:
-                    y[i] = {}
-                y[i][j, k] = S.BoolVar("y[%i,%i,%i]" % (i, j, k))
+    for d, cs in candidates.items():
+        vs = range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1) if (d == (N_DAYS-1) or (d + 1) in candidates) else [occupancy[d+1]]
+        for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+            for v in vs:
+                if accounting_memo[u, v] <= th:
+                    y.setdefault(d, {}).update({(u, v):S.BoolVar("y[%i,%i,%i]" % (d, u, v))})
     return y
 
 
@@ -104,35 +98,11 @@ def _add_family_presence_constraint(S, x, DESIRED):
     for i in range(len(family_presence)):
         S.Add(family_presence[i] == 1)
 
-def _add_occupancy_constraint(S, occupancy):
-    for j in range(N_DAYS):
+def _add_occupancy_constraint(S, candidates, occupancy):
+    for j in sorted(candidates.keys()):
         S.Add(occupancy[j] >= MIN_OCCUPANCY)
         S.Add(occupancy[j] <= MAX_OCCUPANCY)
 
-
-
-def _add_accounting_constraint2(S, y, occupancy):
-    for d, yd in y.items():
-        y_sum_u = S.Sum(
-            [
-                yv * u for (u, _), yv in yd.items()
-            ]
-        )
-        #S.Add(y_sum_u == occupancy[d])
-        S.Add(y_sum_u - occupancy[d] <= 1.0)
-        S.Add(occupancy[d] - y_sum_u <= 1.0)
-
-        y_sum_v = S.Sum(
-            [
-                yv * v for (_, v), yv in yd.items()
-            ]
-        )
-        #S.Add(y_sum_v == occupancy[d + 1])
-        S.Add(y_sum_v - occupancy[d + 1] <= 1.0)
-        S.Add(occupancy[d + 1] - y_sum_v <= 1.0)
-
-        y_sum = S.Sum(yd.values())
-        S.Add(y_sum == 1)
 
 def _add_accounting_constraint(S, y, occupancy):
     for d, yd in y.items():
@@ -155,27 +125,13 @@ def _add_accounting_constraint(S, y, occupancy):
 
 
 def _add_smoothness_constraint(S, y, candidates):
-#    for d, yv in y.items():
-#        if len(candidates) - 1 <= d:
-#            continue
-#        us = {}
-#        vs = {}
-#        for u, v in yv.keys():
-#            us.setdefault(u, set()).add(v)
-#            vs.setdefault(v, set()).add(u)
-#        for t, uu in vs.items():
-#            y_sum_u = S.Sum([yv[u, t] for u in uu])
-#            if 0 < len(candidates[(d + 1)]):
-#                y_sum_v = S.Sum([y[d + 1][t, v] for v in us[t]])
-#                S.Add(y_sum_u == y_sum_v)
-    for d, cs in enumerate(candidates[:-1]):
-        if len(cs) == 0:
+    for d, cs in candidates.items():
+        if (d + 1) not in candidates:
             continue
         for t in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
             y_sum_u = S.Sum([y[d][u, t] for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1) if (u,t) in y[d]])
-            if 0 < len(candidates[(d + 1)]):
-                y_sum_v = S.Sum([y[d + 1][t, v] for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1) if (t,v) in y[d+1]])
-                S.Add(y_sum_u == y_sum_v)
+            y_sum_v = S.Sum([y[d + 1][t, v] for v in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1) if (t,v) in y[d+1]])
+            S.Add(y_sum_u == y_sum_v)
 
 
 def _calc_occupancy(S, x, prediction, occupancy, candidates, family_size):
@@ -183,8 +139,8 @@ def _calc_occupancy(S, x, prediction, occupancy, candidates, family_size):
     for fam_id, d in prediction.items():
         if d is not None:
             occupancy[d] -= family_size[fam_id]
-    for d in range(N_DAYS):
-        occupancy[d] += S.Sum([x[i, d] * family_size[i] for i in candidates[d]])
+    for d, cs in candidates.items():
+        occupancy[d] += S.Sum([x[i, d] * family_size[i] for i in cs])
     occupancy.append(occupancy[-1])
     return occupancy
 
@@ -201,19 +157,21 @@ def solveSantaIP(
     # S.set_time_limit(limit_in_seconds*1000*NumThreads) #cpu time = wall time * N_threads
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
-    y = _add_accounting_candidates(S, candidates, th, accounting_memo)
     occupancy = _calc_occupancy(S, x, prediction, daily_occupancy, candidates, family_size)
+    y = _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo)
 
     # Objective
-    preference_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
-    accounting_cost = _calc_accounting_cost(S, y, accounting_memo)
-    S.Minimize(preference_cost + accounting_cost)
+    total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
+    if 0 < len(y):
+        total_cost += _calc_accounting_cost(S, y, accounting_memo)
+    S.Minimize(total_cost)
 
     # Constraints
     _add_family_presence_constraint(S, x, DESIRED)
-    _add_occupancy_constraint(S, occupancy)
-    _add_accounting_constraint(S, y, occupancy)
-    _add_smoothness_constraint(S, y, candidates)
+    _add_occupancy_constraint(S, candidates, occupancy)
+    if 0 < len(y):
+        _add_accounting_constraint(S, y, occupancy)
+        _add_smoothness_constraint(S, y, candidates)
 
     res = S.Solve()
 
@@ -257,11 +215,9 @@ def build_lp_mip(data):
 
         assigned_df["family_size"] = family_size[assigned_df.family_id]
         occupancy = assigned_df.groupby("day").family_size.sum().values
-        min_occupancy = np.array([max(0, MIN_OCCUPANCY - o) for o in occupancy])
-        max_occupancy = np.array([MAX_OCCUPANCY - o for o in occupancy])
 
         rdf = solveSantaIP(
-            predictions, unassigned, occupancy, 4096, family_size, penalty_memo, accounting_memo
+            predictions, unassigned, occupancy, 512, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
         df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
             "family_id"
