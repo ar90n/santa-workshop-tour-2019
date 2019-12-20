@@ -202,9 +202,9 @@ def build_lp_mip(data):
     family_size = data.n_people.values
     penalty_memo = create_penalty_memo(data)
     accounting_memo = create_accounting_memo()
-    DESIRED = {i: data.values[i, :-3] - 1 for i in range(data.shape[0])}
 
-    def solveSanta():
+    def solveSanta(choices=7, accounting_thresh=4096):
+        DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
         df = solveSantaLP(
             DESIRED, family_size, penalty_memo, accounting_memo
         )  # Initial solution for most of families
@@ -223,7 +223,7 @@ def build_lp_mip(data):
             predictions,
             unassigned,
             occupancy,
-            4096,
+            accounting_thresh,
             family_size,
             penalty_memo,
             accounting_memo,
