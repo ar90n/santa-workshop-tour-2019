@@ -261,7 +261,7 @@ def build_lp_mip(data):
         max_occupancy = np.array([MAX_OCCUPANCY - o for o in occupancy])
 
         rdf = solveSantaIP(
-            predictions, DESIRED, occupancy, 1e12, family_size, penalty_memo, accounting_memo
+            predictions, unassigned, occupancy, 4096, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
         df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
             "family_id"
