@@ -3,6 +3,8 @@ import pandas as pd
 from ortools.linear_solver import pywraplp
 from .const import N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY
 from .cost import create_penalty_memo, create_accounting_memo
+from .util import non_adj_famply_sampling, group_by_day
+import random
 
 # N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY = 5, 10, 8, 2
 
@@ -29,10 +31,13 @@ def _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo):
     for d, cs in candidates.items():
         vs = (
             range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
-            if (d == (N_DAYS - 1) or (d + 1) in candidates)
+            if (d + 1) in candidates
             else [occupancy[d + 1]]
         )
+
         for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+            if d == (N_DAYS - 1):
+                vs = [u]
             for v in vs:
                 if accounting_memo[u, v] <= th:
                     y.setdefault(d, {}).update(
@@ -51,11 +56,16 @@ def _calc_preference_cost(S, x, DESIRED, penalty_memo):
     )
 
 
-def _calc_accounting_cost(S, y, accounting_memo):
+def _calc_accounting_cost(S, y, occupancy, accounting_memo):
     days = set(y.keys())
-    return S.Sum(
-        [accounting_memo[u, v] * yv for d in days for (u, v), yv in y[d].items()]
-    )
+    ret = []
+    for d, vals in y.items():
+        for (u, v), yv in vals.items():
+            coef = accounting_memo[u, v]
+            if 0 < d:
+                coef += accounting_memo[occupancy[d - 1], u]
+            ret.append(coef * yv)
+    return S.Sum(ret)
 
 
 def _add_family_presence_constraint(S, x, DESIRED):
@@ -180,7 +190,7 @@ def solveSantaIP(
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
     if 0 < len(y):
-        total_cost += _calc_accounting_cost(S, y, accounting_memo)
+        total_cost += _calc_accounting_cost(S, y, occupancy, accounting_memo)
     S.Minimize(total_cost)
 
     # Constraints
@@ -197,6 +207,53 @@ def solveSantaIP(
 
     return _get_result_df(DESIRED, x)
 
+def build_mip(data, choices=-1, accounting_thresh=4096):
+    family_size = data.n_people.values
+    penalty_memo = create_penalty_memo(data)
+    accounting_memo = create_accounting_memo()
+    DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
+
+    def _mip(prediction, daily_occupancy):
+        new = prediction.copy()
+        daily_occupancy = daily_occupancy.copy()
+
+        rem_days = set(range(1, 101))
+        sel_days = []
+        while 0 < len(rem_days):
+            focus_day = random.choice(tuple(rem_days))
+
+            sel_days.append(focus_day)
+            rem_days.remove(focus_day)
+            if focus_day - 1 in rem_days:
+                rem_days.remove(focus_day - 1)
+            if focus_day + 1 in rem_days:
+                rem_days.remove(focus_day + 1)
+
+        families_per_day = group_by_day(prediction)
+        random.shuffle(sel_days)
+        fam_ids = []
+        for d in sel_days:
+            fam_ids = [*fam_ids, *families_per_day[d]]
+
+        unassigned = {i: list(set([new[i]-1, *[d for d in DESIRED[i] if (d+1) in sel_days]])) for i in fam_ids}
+        prediction = {i: new[i]-1 for i in fam_ids}
+
+        df = solveSantaIP(
+            prediction,
+            unassigned,
+            daily_occupancy[1:],
+            accounting_thresh,
+            family_size,
+            penalty_memo,
+            accounting_memo
+        )
+        for _, row in df.iterrows():
+            fam_id = int(row["family_id"])
+            day = int(row["day"]) + 1
+            new[fam_id] = day
+        return new
+
+    return _mip
 
 def build_lp_mip(data):
     family_size = data.n_people.values
@@ -227,7 +284,7 @@ def build_lp_mip(data):
             family_size,
             penalty_memo,
             accounting_memo,
-        )  # solve the rest with MIP
+        )
         df = pd.concat((assigned_df, rdf)).sort_values("family_id")
         return df.day.values + 1
 

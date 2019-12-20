@@ -1,25 +1,10 @@
 from lap import lapjv
 import numpy as np
 from .cost import create_penalty_memo, create_accounting_memo, _partial_accounting_cost
+from .util import group_by_day, non_adj_famply_sampling
 from numba import njit
 import random
 from collections import deque
-
-
-def group_by_family_size(fam_ids, family_size):
-    group = {}
-    for fam_id in fam_ids:
-        fam_size = family_size[fam_id]
-        group.setdefault(fam_size, []).append(fam_id)
-    return group
-
-
-def group_by_day(prediction):
-    fams = {}
-    for fam_id in range(len(prediction)):
-        day = prediction[fam_id]
-        fams.setdefault(day, []).append(fam_id)
-    return {k: np.array(v, dtype=np.int64) for k, v in fams.items()}
 
 
 def _concat_source_ids(id_groups, target_size):
@@ -135,22 +120,10 @@ def build_non_adj_family_lap(data):
     accounting_memo = create_accounting_memo()
 
     def _non_adj_family_lap(prediction, daily_occupancy):
-        families_per_day = group_by_day(prediction)
         new = prediction.copy()
         daily_occupancy = daily_occupancy.copy()
 
-        days = set(range(1, 101))
-        fam_ids = []
-        while 0 < len(days):
-            focus_day = random.choice(tuple(days))
-            fam_id = random.choice(families_per_day[focus_day])
-            fam_ids.append(fam_id)
-
-            days.remove(focus_day)
-            if focus_day - 1 in days:
-                days.remove(focus_day - 1)
-            if focus_day + 1 in days:
-                days.remove(focus_day + 1)
+        fam_ids = non_adj_famply_sampling(prediction)
 
         weights = np.zeros((len(fam_ids), len(fam_ids)), dtype=np.int64)
         for i in range(len(fam_ids)):
