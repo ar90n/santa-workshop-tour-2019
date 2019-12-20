@@ -56,13 +56,13 @@ def _calc_preference_cost(S, x, DESIRED, penalty_memo):
     )
 
 
-def _calc_accounting_cost(S, y, occupancy, accounting_memo):
+def _calc_accounting_cost(S, y, occupancy, accounting_memo, is_bidirect=False):
     days = set(y.keys())
     ret = []
     for d, vals in y.items():
         for (u, v), yv in vals.items():
             coef = accounting_memo[u, v]
-            if 0 < d:
+            if is_bidirect and 0 < d:
                 coef += accounting_memo[occupancy[d - 1], u]
             ret.append(coef * yv)
     return S.Sum(ret)
@@ -174,7 +174,7 @@ def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
 
 
 def solveSantaIP(
-    prediction, DESIRED, daily_occupancy, th, family_size, penalty_memo, accounting_memo
+    prediction, DESIRED, daily_occupancy, th, family_size, penalty_memo, accounting_memo, is_bidirect=False
 ):
 
     S = pywraplp.Solver(
@@ -190,7 +190,7 @@ def solveSantaIP(
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
     if 0 < len(y):
-        total_cost += _calc_accounting_cost(S, y, occupancy, accounting_memo)
+        total_cost += _calc_accounting_cost(S, y, occupancy, accounting_memo, is_bidirect)
     S.Minimize(total_cost)
 
     # Constraints
@@ -245,7 +245,8 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             accounting_thresh,
             family_size,
             penalty_memo,
-            accounting_memo
+            accounting_memo,
+            True
         )
         for _, row in df.iterrows():
             fam_id = int(row["family_id"])
