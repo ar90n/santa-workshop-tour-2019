@@ -6,53 +6,12 @@ from .cost import create_penalty_memo, create_accounting_memo
 
 #N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY = 5, 10, 8, 2
 
-def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
+NumThreads = 4
 
-    S = pywraplp.Solver(
-        "SolveAssignmentProblem", pywraplp.Solver.GLOP_LINEAR_PROGRAMMING
-    )
-
-    # S.SetNumThreads(NumThreads)
-    # S.set_time_limit(limit_in_seconds*1000*NumThreads) #cpu time = wall time * N_threads
-
-    x, candidates = _add_penalty_candidates(S, DESIRED)
-    occupancy = _calc_occupancy(S, x, {}, [0] * len(family_size), candidates, family_size)
-
-    # 
-    preference_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
-    S.Minimize(preference_cost)
-
-    # Constraints
-    for j in range(N_DAYS - 1):
-        S.Add(occupancy[j] - occupancy[j + 1] <= 23)
-        S.Add(occupancy[j + 1] - occupancy[j] <= 23)
-    _add_family_presence_constraint(S, x, DESIRED)
-    _add_occupancy_constraint(S, candidates, occupancy)
-
-    res = S.Solve()
-
-    resdict = {
-        0: "OPTIMAL",
-        1: "FEASIBLE",
-        2: "INFEASIBLE",
-        3: "UNBOUNDED",
-        4: "ABNORMAL",
-        5: "MODEL_INVALID",
-        6: "NOT_SOLVED",
-    }
-
-    print("LP solver result:", resdict[res])
-
-    l = [
-        (i, j, x[i, j].solution_value())
-        for i, days in DESIRED.items()
-        for j in days
-        if x[i, j].solution_value() > 0
-    ]
-
-    df = pd.DataFrame(l, columns=["family_id", "day", "n"])
-    return df
-
+def _add_delta_occupancy_constraint(S, occupancy, delta):
+    for j in range(len(occupancy) - 1):
+        S.Add(occupancy[j] - occupancy[j + 1] <= delta)
+        S.Add(occupancy[j + 1] - occupancy[j] <= delta)
 
 def _add_penalty_candidates(S, DESIRED):
     x = {}
@@ -144,6 +103,53 @@ def _calc_occupancy(S, x, prediction, occupancy, candidates, family_size):
     occupancy.append(occupancy[-1])
     return occupancy
 
+def _get_solver_result(res):
+    return {
+        0: "OPTIMAL",
+        1: "FEASIBLE",
+        2: "INFEASIBLE",
+        3: "UNBOUNDED",
+        4: "ABNORMAL",
+        5: "MODEL_INVALID",
+        6: "NOT_SOLVED",
+    }[res]
+
+def _get_result_df(DESIRED, x):
+    l = [
+        (i, j, x[i, j].solution_value())
+        for i, days in DESIRED.items()
+        for j in days
+        if x[i, j].solution_value() > 0
+    ]
+    return pd.DataFrame(l, columns=["family_id", "day", "n"])
+
+def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
+
+    S = pywraplp.Solver(
+        "SolveAssignmentProblem", pywraplp.Solver.GLOP_LINEAR_PROGRAMMING
+    )
+
+    S.SetNumThreads(NumThreads)
+    # S.set_time_limit(limit_in_seconds*1000*NumThreads) #cpu time = wall time * N_threads
+
+    x, candidates = _add_penalty_candidates(S, DESIRED)
+    occupancy = _calc_occupancy(S, x, {}, [0] * N_DAYS, candidates, family_size)
+
+    # Objective
+    preference_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
+    S.Minimize(preference_cost)
+
+    # Constraints
+    _add_delta_occupancy_constraint(S, occupancy, 23)
+    _add_family_presence_constraint(S, x, DESIRED)
+    _add_occupancy_constraint(S, candidates, occupancy)
+
+    res = S.Solve()
+
+    solver_result = _get_solver_result(res)
+    print("LP solver result:", solver_result)
+
+    return _get_result_df(DESIRED, x)
 
 def solveSantaIP(
     prediction, DESIRED, daily_occupancy, th, family_size, penalty_memo, accounting_memo
@@ -153,7 +159,7 @@ def solveSantaIP(
         "SolveAssignmentProblem", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
     )
 
-    # S.SetNumThreads(NumThreads)
+    S.SetNumThreads(NumThreads)
     # S.set_time_limit(limit_in_seconds*1000*NumThreads) #cpu time = wall time * N_threads
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
@@ -175,24 +181,10 @@ def solveSantaIP(
 
     res = S.Solve()
 
-    resdict = {
-        0: "OPTIMAL",
-        1: "FEASIBLE",
-        2: "INFEASIBLE",
-        3: "UNBOUNDED",
-        4: "ABNORMAL",
-        5: "MODEL_INVALID",
-        6: "NOT_SOLVED",
-    }
+    solver_result = _get_solver_result(res)
+    print("MIP solver result:", solver_result)
 
-    print("MIP solver result:", resdict[res])
-
-    l = [
-        (i, j) for i, days in DESIRED.items() for j in days if x[i, j].solution_value() > 0
-    ]
-
-    df = pd.DataFrame(l, columns=["family_id", "day"])
-    return df
+    return _get_result_df(DESIRED, x)
 
 
 def build_lp_mip(data):
@@ -217,11 +209,9 @@ def build_lp_mip(data):
         occupancy = assigned_df.groupby("day").family_size.sum().values
 
         rdf = solveSantaIP(
-            predictions, unassigned, occupancy, 512, family_size, penalty_memo, accounting_memo
+            predictions, unassigned, occupancy, 1024, family_size, penalty_memo, accounting_memo
         )  # solve the rest with MIP
-        df = pd.concat((assigned_df[["family_id", "day"]], rdf)).sort_values(
-            "family_id"
-        )
+        df = pd.concat((assigned_df, rdf)).sort_values("family_id")
         return df.day.values + 1
 
     return solveSanta
