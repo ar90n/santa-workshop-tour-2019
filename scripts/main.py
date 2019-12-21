@@ -26,7 +26,7 @@ score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
 
-while i <= 32:
+while i <= 160:
     best, daily_occupancy = greedy_move(best, daily_occupancy)
     score, daily_occupancy = total_cost(best)
     print(f"Score1: {score}")
