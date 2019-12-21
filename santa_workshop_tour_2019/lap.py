@@ -1,7 +1,7 @@
 from lap import lapjv
 import numpy as np
 from .cost import create_penalty_memo, create_accounting_memo, _partial_accounting_cost
-from .util import group_by_day, non_adj_famply_sampling
+from .util import group_by_day, group_by_family_size, non_adj_famply_sampling
 from numba import njit
 import random
 from collections import deque
