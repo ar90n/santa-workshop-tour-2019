@@ -216,8 +216,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             1e12,
             family_size,
             penalty_memo,
-            accounting_memo,
-            True,
+            accounting_memo
         )
         for _, row in df.iterrows():
             fam_id = int(row["family_id"])
