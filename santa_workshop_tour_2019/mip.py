@@ -235,7 +235,7 @@ def build_init_solver(data):
     def solveSanta(choices=7, accounting_thresh=4096):
         DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
         df = solve(
-                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, [0] * N_DAYS, -1, 23, family_size, penalty_memo, accounting_memo
+                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, [0] * N_DAYS, 4096, 23, family_size, penalty_memo, accounting_memo
         )
         THRS = 0.999
 
