@@ -161,7 +161,7 @@ def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
     S.Minimize(preference_cost)
 
     # Constraints
-    _add_delta_occupancy_constraint(S, occupancy, 23)
+    _add_delta_occupancy_constraint(S, occupancy, 25)
     _add_family_presence_constraint(S, x, DESIRED)
     _add_occupancy_constraint(S, candidates, occupancy)
 
