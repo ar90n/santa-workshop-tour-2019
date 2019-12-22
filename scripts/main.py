@@ -24,7 +24,7 @@ score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
 
-while i <= 160:
+while i <= 220:
     best, daily_occupancy = greedy_move(best, daily_occupancy)
     score, daily_occupancy = total_cost(best)
     print(f"Score1: {score}")
@@ -32,13 +32,6 @@ while i <= 160:
     best, daily_occupancy = greedy_swap(best, daily_occupancy)
     score, daily_occupancy = total_cost(best)
     print(f"Score2: {score}")
-
-    ords = list(range(2, 9))
-    random.shuffle(ords)
-    for s in ords:
-        best = family_size_lap(best, s)
-        score, daily_occupancy = total_cost(best)
-        print(f"Score3.{s}: {score}")
 
     best = mip(best, daily_occupancy)
     score, daily_occupancy = total_cost(best)
