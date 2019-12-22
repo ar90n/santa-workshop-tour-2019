@@ -1,8 +1,5 @@
 import numpy as np
-from itertools import product
-import random
-from santa_workshop_tour_2019.const import cols
-from functools import partial
+from .const import cols
 from numba import njit
 
 
@@ -61,56 +58,3 @@ def build_greedy_swap_func(data, delta_swap_cost_func):
         return new, daily_occupancy
 
     return _greedy_swap_impl
-
-
-def stochastic_product_search(
-    best,
-    choice_dict,
-    cost_function,
-    top_k,
-    fam_size,
-    disable_tqdm=False,
-    verbose=10000,
-    n_iter=500,
-    random_state=2019,
-):
-    """
-    original (np.array): The original day assignments.
-
-    At every iterations, randomly sample fam_size families. Then, given their top_k
-    choices, compute the Cartesian product of the families' choices, and compute the
-    score for each of those top_k^fam_size products.
-    """
-
-    best = best.copy()
-    best_score = cost_function(best)
-
-    np.random.seed(random_state)
-
-    choice_matrix = np.zeros((len(best), top_k), dtype=np.int64)
-    for i in range(top_k):
-        choice_matrix[:, i] = [f for _, f in sorted(choice_dict[f"choice_{i}"].items())]
-
-    for i in range(n_iter):
-        fam_indices = np.random.choice(range(len(best)), size=fam_size)
-        changes = np.array(list(product(*choice_matrix[fam_indices, :].tolist())))
-
-        for change in changes:
-            new = best.copy()
-            new[fam_indices] = change
-
-            new_score = cost_function(new)
-
-            if new_score < best_score:
-                best_score = new_score
-                best = new
-
-        if new_score < best_score:
-            best_score = new_score
-            best = new
-
-        if verbose and i % verbose == 0:
-            print(f"Iteration #{i}: Best score is {best_score:.2f}")
-
-    print(f"Final best score is {best_score:.2f}")
-    return best, best_score

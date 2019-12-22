@@ -3,11 +3,8 @@ import pandas as pd
 from ortools.linear_solver import pywraplp
 from .const import N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY
 from .cost import create_penalty_memo, create_accounting_memo
-from .util import non_adj_famply_sampling, group_by_day
+from .util import group_by_day
 import random
-
-# N_DAYS, N_FAMILIES, MAX_OCCUPANCY, MIN_OCCUPANCY = 5, 10, 8, 2
-
 
 def _add_delta_occupancy_constraint(S, occupancy, delta):
     for j in range(len(occupancy) - 1):
@@ -28,7 +25,7 @@ def _add_penalty_candidates(S, DESIRED):
 
 def _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo):
     y = {}
-    for d, cs in candidates.items():
+    for d in candidates.keys():
         vs = (
             range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
             if (d + 1) in candidates
@@ -46,7 +43,7 @@ def _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo):
     return y
 
 
-def _calc_faily_presence(S, x, DESIRED):
+def _calc_family_presence(S, x, DESIRED):
     return [S.Sum([x[i, j] for j in days]) for i, days in DESIRED.items()]
 
 
@@ -56,20 +53,20 @@ def _calc_preference_cost(S, x, DESIRED, penalty_memo):
     )
 
 
-def _calc_accounting_cost(S, y, occupancy, accounting_memo, is_bidirect=False):
+def _calc_accounting_cost(S, y, occupancy, accounting_memo):
     days = set(y.keys())
     ret = []
     for d, vals in y.items():
         for (u, v), yv in vals.items():
             coef = accounting_memo[u, v]
-            if is_bidirect and 0 < d:
+            if (0 < d) and (d - 1) not in days:
                 coef += accounting_memo[occupancy[d - 1], u]
             ret.append(coef * yv)
     return S.Sum(ret)
 
 
 def _add_family_presence_constraint(S, x, DESIRED):
-    family_presence = _calc_faily_presence(S, x, DESIRED)
+    family_presence = _calc_family_presence(S, x, DESIRED)
     for i in range(len(family_presence)):
         S.Add(family_presence[i] == 1)
 
@@ -93,7 +90,7 @@ def _add_accounting_constraint(S, y, occupancy):
 
 
 def _add_smoothness_constraint(S, y, candidates):
-    for d, cs in candidates.items():
+    for d in candidates.keys():
         if (d + 1) not in candidates:
             continue
         for t in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
@@ -125,18 +122,6 @@ def _calc_occupancy(S, x, prediction, occupancy, candidates, family_size):
     return occupancy
 
 
-def _get_solver_result(res):
-    return {
-        0: "OPTIMAL",
-        1: "FEASIBLE",
-        2: "INFEASIBLE",
-        3: "UNBOUNDED",
-        4: "ABNORMAL",
-        5: "MODEL_INVALID",
-        6: "NOT_SOLVED",
-    }[res]
-
-
 def _get_result_df(DESIRED, x):
     l = [
         (i, j, x[i, j].solution_value())
@@ -147,65 +132,46 @@ def _get_result_df(DESIRED, x):
     return pd.DataFrame(l, columns=["family_id", "day", "n"])
 
 
-def solveSantaLP(DESIRED, family_size, penalty_memo, accounting_memo):
-
-    S = pywraplp.Solver(
-        "SolveAssignmentProblem", pywraplp.Solver.GLOP_LINEAR_PROGRAMMING
-    )
-
-    x, candidates = _add_penalty_candidates(S, DESIRED)
-    occupancy = _calc_occupancy(S, x, {}, [0] * N_DAYS, candidates, family_size)
-
-    # Objective
-    preference_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
-    S.Minimize(preference_cost)
-
-    # Constraints
-    _add_delta_occupancy_constraint(S, occupancy, 25)
-    _add_family_presence_constraint(S, x, DESIRED)
-    _add_occupancy_constraint(S, candidates, occupancy)
-
-    res = S.Solve()
-
-    solver_result = _get_solver_result(res)
-    print("LP solver result:", solver_result)
-
-    return _get_result_df(DESIRED, x)
-
-
-def solveSantaIP(
-    prediction, DESIRED, daily_occupancy, th, family_size, penalty_memo, accounting_memo, is_bidirect=False
+def solve(
+    solver,
+    prediction,
+    DESIRED,
+    daily_occupancy,
+    th,
+    th2,
+    family_size,
+    penalty_memo,
+    accounting_memo
 ):
 
     S = pywraplp.Solver(
-        "SolveAssignmentProblem", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
+        "SolveAssignmentProblem", solver
     )
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
-    occupancy = _calc_occupancy(
-        S, x, prediction, daily_occupancy, candidates, family_size
-    )
+    occupancy = _calc_occupancy(S, x, prediction, daily_occupancy, candidates, family_size)
     y = _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo)
 
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
     if 0 < len(y):
-        total_cost += _calc_accounting_cost(S, y, occupancy, accounting_memo, is_bidirect)
+        total_cost += _calc_accounting_cost(
+            S, y, occupancy, accounting_memo
+        )
     S.Minimize(total_cost)
 
     # Constraints
-    _add_family_presence_constraint(S, x, DESIRED)
-    _add_occupancy_constraint(S, candidates, occupancy)
     if 0 < len(y):
         _add_accounting_constraint(S, y, occupancy)
         _add_smoothness_constraint(S, y, candidates)
+    else:
+        _add_delta_occupancy_constraint(S, occupancy, th2)
+    _add_family_presence_constraint(S, x, DESIRED)
+    _add_occupancy_constraint(S, candidates, occupancy)
 
-    res = S.Solve()
-
-    solver_result = _get_solver_result(res)
-    print("MIP solver result:", solver_result)
-
+    S.Solve()
     return _get_result_df(DESIRED, x)
+
 
 def build_mip(data, choices=-1, accounting_thresh=4096):
     family_size = data.n_people.values
@@ -235,18 +201,23 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
         for d in sel_days:
             fam_ids = [*fam_ids, *families_per_day[d]]
 
-        unassigned = {i: list(set([new[i]-1, *[d for d in DESIRED[i] if (d+1) in sel_days]])) for i in fam_ids}
-        prediction = {i: new[i]-1 for i in fam_ids}
+        unassigned = {
+            i: list(set([new[i] - 1, *[d for d in DESIRED[i] if (d + 1) in sel_days]]))
+            for i in fam_ids
+        }
+        prediction = {i: new[i] - 1 for i in fam_ids}
 
-        df = solveSantaIP(
+        df = solve(
+            pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING,
             prediction,
             unassigned,
             daily_occupancy[1:],
             accounting_thresh,
+            1e12,
             family_size,
             penalty_memo,
             accounting_memo,
-            True
+            True,
         )
         for _, row in df.iterrows():
             fam_id = int(row["family_id"])
@@ -256,32 +227,34 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
 
     return _mip
 
-def build_lp_mip(data):
+
+def build_init_solver(data):
     family_size = data.n_people.values
     penalty_memo = create_penalty_memo(data)
     accounting_memo = create_accounting_memo()
 
     def solveSanta(choices=7, accounting_thresh=4096):
         DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
-        df = solveSantaLP(
-            DESIRED, family_size, penalty_memo, accounting_memo
-        )  # Initial solution for most of families
+        df = solve(
+                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, [0] * N_DAYS, -1, 23, family_size, penalty_memo, accounting_memo
+        )
         THRS = 0.999
 
         assigned_df = df[df.n > THRS].copy()
         unassigned_df = df[(df.n <= THRS) & (df.n > 1 - THRS)]
         unassigned = {i: DESIRED[i] for i in unassigned_df.family_id.unique()}
         predictions = {i: None for i in unassigned.keys()}
-        print("{} unassigned families".format(len(unassigned)))
 
         assigned_df["family_size"] = family_size[assigned_df.family_id]
         occupancy = assigned_df.groupby("day").family_size.sum().values
 
-        rdf = solveSantaIP(
+        rdf = solve(
+            pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING,
             predictions,
             unassigned,
             occupancy,
             accounting_thresh,
+            1e12,
             family_size,
             penalty_memo,
             accounting_memo,

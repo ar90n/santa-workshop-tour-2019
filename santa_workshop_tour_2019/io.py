@@ -13,6 +13,7 @@ def load_sample_submission(root: Path = Path("../input")) -> pd.DataFrame:
     path = root / "santa-workshop-tour-2019" / "sample_submission.csv"
     return load_submission(path)
 
+
 def load_submission(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, index_col="family_id")
 

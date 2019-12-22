@@ -15,14 +15,20 @@ def create_accounting_memo():
     for today_count in range(MAX_OCCUPANCY + 1):
         for yesterday_count in range(MAX_OCCUPANCY + 1):
             if today_count < MIN_OCCUPANCY or MAX_OCCUPANCY < today_count:
-                exceeding_count = max(MIN_OCCUPANCY - today_count, today_count - MAX_OCCUPANCY)
-                accounting_matrix[today_count, yesterday_count] = 10000000 * exceeding_count
+                exceeding_count = max(
+                    MIN_OCCUPANCY - today_count, today_count - MAX_OCCUPANCY
+                )
+                accounting_matrix[today_count, yesterday_count] = (
+                    10000000 * exceeding_count
+                )
             else:
                 diff = abs(today_count - yesterday_count)
                 accounting_cost = (
                     (today_count - 125.0) / 400.0 * today_count ** (0.5 + diff / 50.0)
                 )
-                accounting_matrix[today_count, yesterday_count] = max(0, accounting_cost)
+                accounting_matrix[today_count, yesterday_count] = max(
+                    0, accounting_cost
+                )
 
     return accounting_matrix
 
