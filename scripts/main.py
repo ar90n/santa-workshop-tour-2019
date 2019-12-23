@@ -16,10 +16,10 @@ greedy_move = build_greedy_move_func(data, delta_move_cost)
 greedy_swap = build_greedy_swap_func(data, delta_swap_cost)
 family_size_lap = build_family_size_lap(data)
 init = build_init_solver(data)
-mip = build_mip(data, choices=7, accounting_thresh=2048)
+mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
-best = init(choices=7, accounting_thresh=4096)
+best = init(choices=6, accounting_thresh=4096)
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
