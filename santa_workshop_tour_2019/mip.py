@@ -187,7 +187,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
     accounting_memo = create_accounting_memo()
     DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
 
-    n = 8
+    n = 16 
 
     def _mip(prediction, daily_occupancy):
         new = prediction.copy()
