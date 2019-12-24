@@ -23,16 +23,22 @@ def _add_penalty_candidates(S, DESIRED):
     return x, candidates
 
 
-def _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo):
+def _add_accounting_candidates(S, candidates, occupancy, th, prev_occupancy, accounting_memo):
     y = {}
+    half_range = 20 if prev_occupancy is not None else 1e12
+    if prev_occupancy is not None:
+        prev_occupancy = list(prev_occupancy.copy())
+        prev_occupancy.append(prev_occupancy[-1])
     for d in candidates.keys():
+        po = prev_occupancy[d+1] if prev_occupancy is not None else 0
+        po2 = prev_occupancy[d] if prev_occupancy is not None else 0
         vs = (
-            range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1)
+            range(max(MIN_OCCUPANCY, po - half_range), min(po + half_range, MAX_OCCUPANCY + 1))
             if (d + 1) in candidates
             else [occupancy[d + 1]]
         )
 
-        for u in range(MIN_OCCUPANCY, MAX_OCCUPANCY + 1):
+        for u in range(max(MIN_OCCUPANCY, po2 - half_range), min(po2 + half_range, MAX_OCCUPANCY + 1)):
             if d == (N_DAYS - 1):
                 vs = [u]
             for v in vs:
@@ -112,7 +118,7 @@ def _add_smoothness_constraint(S, y, candidates):
 
 
 def _calc_occupancy(S, x, prediction, occupancy, candidates, family_size):
-    occupancy = list(occupancy.copy())
+    occupancy = list(occupancy.copy()) if occupancy is not None else [0] * N_DAYS
     for fam_id, d in prediction.items():
         if d is not None:
             occupancy[d] -= family_size[fam_id]
@@ -150,7 +156,7 @@ def solve(
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
     occupancy = _calc_occupancy(S, x, prediction, daily_occupancy, candidates, family_size)
-    y = _add_accounting_candidates(S, candidates, occupancy, th, accounting_memo)
+    y = _add_accounting_candidates(S, candidates, occupancy, th, daily_occupancy, accounting_memo)
 
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
@@ -169,6 +175,8 @@ def solve(
     _add_family_presence_constraint(S, x, DESIRED)
     _add_occupancy_constraint(S, candidates, occupancy)
 
+    print("Variable:", S.NumVariables())
+    print("Constraints:", S.NumConstraints())
     S.Solve()
     return _get_result_df(DESIRED, x)
 
@@ -179,12 +187,15 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
     accounting_memo = create_accounting_memo()
     DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
 
+    n = 8
+
     def _mip(prediction, daily_occupancy):
         new = prediction.copy()
         daily_occupancy = daily_occupancy.copy()
 
         rem_days = set(range(1, 101))
         sel_days = []
+        drop_days = []
         while 0 < len(rem_days):
             focus_day = random.choice(tuple(rem_days))
 
@@ -192,10 +203,14 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             rem_days.remove(focus_day)
             if focus_day - 1 in rem_days:
                 rem_days.remove(focus_day - 1)
+                drop_days.append(focus_day - 1)
             if focus_day + 1 in rem_days:
                 rem_days.remove(focus_day + 1)
+                drop_days.append(focus_day + 1)
 
         families_per_day = group_by_day(prediction)
+        random.shuffle(drop_days)
+        sel_days = [*sel_days, *drop_days[:n]]
         random.shuffle(sel_days)
         fam_ids = []
         for d in sel_days:
@@ -235,7 +250,7 @@ def build_init_solver(data):
     def solveSanta(choices=7, accounting_thresh=4096):
         DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
         df = solve(
-                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, [0] * N_DAYS, 4096, 23, family_size, penalty_memo, accounting_memo
+                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, None, -1, 23, family_size, penalty_memo, accounting_memo
         )
         THRS = 0.999
 
@@ -243,6 +258,7 @@ def build_init_solver(data):
         unassigned_df = df[(df.n <= THRS) & (df.n > 1 - THRS)]
         unassigned = {i: DESIRED[i] for i in unassigned_df.family_id.unique()}
         predictions = {i: None for i in unassigned.keys()}
+        print(len(unassigned))
 
         assigned_df["family_size"] = family_size[assigned_df.family_id]
         occupancy = assigned_df.groupby("day").family_size.sum().values
