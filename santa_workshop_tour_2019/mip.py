@@ -25,7 +25,7 @@ def _add_penalty_candidates(S, DESIRED):
 
 def _add_accounting_candidates(S, candidates, occupancy, th, prev_occupancy, accounting_memo):
     y = {}
-    half_range = 20 if prev_occupancy is not None else 1e12
+    half_range = 10 if prev_occupancy is not None else 1e12
     if prev_occupancy is not None:
         prev_occupancy = list(prev_occupancy.copy())
         prev_occupancy.append(prev_occupancy[-1])
