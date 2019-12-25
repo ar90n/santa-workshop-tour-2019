@@ -23,9 +23,8 @@ def _add_penalty_candidates(S, DESIRED):
     return x, candidates
 
 
-def _add_accounting_candidates(S, candidates, occupancy, th, prev_occupancy, accounting_memo):
+def _add_accounting_candidates(S, candidates, occupancy, th, prev_occupancy, half_range, accounting_memo):
     y = {}
-    half_range = 10 if prev_occupancy is not None else 1e12
     if prev_occupancy is not None:
         prev_occupancy = list(prev_occupancy.copy())
         prev_occupancy.append(prev_occupancy[-1])
@@ -145,6 +144,7 @@ def solve(
     daily_occupancy,
     th,
     th2,
+    half_range,
     family_size,
     penalty_memo,
     accounting_memo
@@ -156,7 +156,7 @@ def solve(
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
     occupancy = _calc_occupancy(S, x, prediction, daily_occupancy, candidates, family_size)
-    y = _add_accounting_candidates(S, candidates, occupancy, th, daily_occupancy, accounting_memo)
+    y = _add_accounting_candidates(S, candidates, occupancy, th, daily_occupancy, half_range, accounting_memo)
 
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
@@ -187,9 +187,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
     accounting_memo = create_accounting_memo()
     DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
 
-    n = 16 
-
-    def _mip(prediction, daily_occupancy):
+    def _mip(prediction, daily_occupancy, n, h):
         new = prediction.copy()
         daily_occupancy = daily_occupancy.copy()
 
@@ -229,6 +227,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             daily_occupancy[1:],
             accounting_thresh,
             1e12,
+            h,
             family_size,
             penalty_memo,
             accounting_memo
@@ -250,7 +249,7 @@ def build_init_solver(data):
     def solveSanta(choices=7, accounting_thresh=4096):
         DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
         df = solve(
-                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, None, -1, 23, family_size, penalty_memo, accounting_memo
+                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, None, -1, 23, 1e12, family_size, penalty_memo, accounting_memo
         )
         THRS = 0.999
 
@@ -270,6 +269,7 @@ def build_init_solver(data):
             occupancy,
             accounting_thresh,
             1e12,
+            15,
             family_size,
             penalty_memo,
             accounting_memo,
