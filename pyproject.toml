@@ -28,6 +28,7 @@ kernel_type = "script"
 is_private = true
 enable_gpu = false
 enable_internet = true
+dataset_sources = ["ar90ngas/santa2019temp"]
 competition_sources = ["santa-workshop-tour-2019"]
 
 [tool.kkt]

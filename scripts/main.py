@@ -15,11 +15,10 @@ total_cost, delta_move_cost, delta_swap_cost = build_cost_function(data)
 greedy_move = build_greedy_move_func(data, delta_move_cost)
 greedy_swap = build_greedy_swap_func(data, delta_swap_cost)
 family_size_lap = build_family_size_lap(data)
-init = build_init_solver(data)
 mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
-best = init(choices=6, accounting_thresh=4096)
+best = io.load_submission(Path("../input/santa2019temp/submission_70314.6291748948.csv"))["assigned_day"].to_list()
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
@@ -33,12 +32,12 @@ while i <= 160:
     score, daily_occupancy = total_cost(best)
     print(f"Score2: {score}")
 
-    ords = list(range(2, 9))
-    random.shuffle(ords)
-    for s in ords:
-        best = family_size_lap(best, s)
-        score, daily_occupancy = total_cost(best)
-        print(f"Score3.{s}: {score}")
+#    ords = list(range(2, 9))
+#    random.shuffle(ords)
+#    for s in ords:
+#        best = family_size_lap(best, s)
+#        score, daily_occupancy = total_cost(best)
+#        print(f"Score3.{s}: {score}")
 
     h = int(22 - min(i // 5, 12))
     n = min(i // 3, 12)
