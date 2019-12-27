@@ -8,6 +8,7 @@ from santa_workshop_tour_2019.greedy import (
 from santa_workshop_tour_2019.mip import build_init_solver, build_mip
 from pathlib import Path
 import random
+import numpy as np
 
 data = io.load_data()
 
@@ -18,7 +19,7 @@ family_size_lap = build_family_size_lap(data)
 mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
-best = io.load_submission(Path("../input/santa2019temp/submission_70314.6291748948.csv"))["assigned_day"].to_list()
+best = np.array([int(v) for v in io.load_submission(Path("../input/santa2019temp/submission_70314.6291748948.csv"))["assigned_day"].to_list()], dtype=np.int64)
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
