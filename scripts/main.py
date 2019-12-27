@@ -19,12 +19,12 @@ family_size_lap = build_family_size_lap(data)
 mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
-best = np.array([int(v) for v in io.load_submission(Path("../input/santa2019temp/submission_70314.6291748948.csv"))["assigned_day"].to_list()], dtype=np.int64)
+best = np.array([int(v) for v in io.load_submission(Path("../input/santa2019temp/submission_70256.51653332947.csv"))["assigned_day"].to_list()], dtype=np.int64)
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
 
-while i <= 160:
+while i <= 400:
     best, daily_occupancy = greedy_move(best, daily_occupancy)
     score, daily_occupancy = total_cost(best)
     print(f"Score1: {score}")
