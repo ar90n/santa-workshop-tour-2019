@@ -40,7 +40,9 @@ while i <= 160:
         score, daily_occupancy = total_cost(best)
         print(f"Score3.{s}: {score}")
 
-    best = mip(best, daily_occupancy)
+    h = int(22 - min(i // 5, 12))
+    n = min(i // 3, 12)
+    best = mip(best, daily_occupancy, n, h)
     score, daily_occupancy = total_cost(best)
     print(f"Score4: {score}")
 
