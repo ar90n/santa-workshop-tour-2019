@@ -19,35 +19,29 @@ family_size_lap = build_family_size_lap(data)
 mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
-best = np.array([int(v) for v in io.load_submission(Path("../input/santa2019temp/submission_70256.51653332947.csv"))["assigned_day"].to_list()], dtype=np.int64)
+best = np.array(
+    [
+        int(v)
+        for v in io.load_submission(
+            Path("../input/santa2019work/submission_69450.09241465747.csv")
+        )["assigned_day"].to_list()
+    ],
+    dtype=np.int64,
+)
 score, daily_occupancy = total_cost(best)
 best_score = score
 print(f"Score0: {score}")
 
-while i <= 400:
-    best, daily_occupancy = greedy_move(best, daily_occupancy)
-    score, daily_occupancy = total_cost(best)
-    print(f"Score1: {score}")
-
-    best, daily_occupancy = greedy_swap(best, daily_occupancy)
-    score, daily_occupancy = total_cost(best)
-    print(f"Score2: {score}")
-
-#    ords = list(range(2, 9))
-#    random.shuffle(ords)
-#    for s in ords:
-#        best = family_size_lap(best, s)
-#        score, daily_occupancy = total_cost(best)
-#        print(f"Score3.{s}: {score}")
-
-    h = int(22 - min(i // 5, 12))
-    n = min(i // 3, 12)
-    best = mip(best, daily_occupancy, n, h)
-    score, daily_occupancy = total_cost(best)
-    print(f"Score4: {score}")
+io.save_result(best)
+while i <= 4:
+    cur_best = mip(best, daily_occupancy, 15, 15)
+    cur_score, cur_daily_occupancy = total_cost(cur_best)
+    print(f"Score4: {cur_score}")
 
     i += 1
 
-    if score < best_score:
-        best_score = score
-        io.save_result(best, best_score)
+    if cur_score < best_score:
+        best = cur_best
+        daily_occupancy = cur_daily_occupancy
+        best_score = cur_score
+        io.save_result(cur_best)

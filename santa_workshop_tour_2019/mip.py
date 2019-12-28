@@ -6,6 +6,7 @@ from .cost import create_penalty_memo, create_accounting_memo
 from .util import group_by_day
 import random
 
+
 def _add_delta_occupancy_constraint(S, occupancy, delta):
     for j in range(len(occupancy) - 1):
         S.Add(occupancy[j] - occupancy[j + 1] <= delta)
@@ -23,21 +24,29 @@ def _add_penalty_candidates(S, DESIRED):
     return x, candidates
 
 
-def _add_accounting_candidates(S, candidates, occupancy, th, prev_occupancy, half_range, accounting_memo):
+def _add_accounting_candidates(
+    S, candidates, occupancy, th, prev_occupancy, half_range, accounting_memo
+):
     y = {}
     if prev_occupancy is not None:
         prev_occupancy = list(prev_occupancy.copy())
         prev_occupancy.append(prev_occupancy[-1])
     for d in candidates.keys():
-        po = prev_occupancy[d+1] if prev_occupancy is not None else 0
+        po = prev_occupancy[d + 1] if prev_occupancy is not None else 0
         po2 = prev_occupancy[d] if prev_occupancy is not None else 0
         vs = (
-            range(max(MIN_OCCUPANCY, po - half_range), min(po + half_range, MAX_OCCUPANCY + 1))
+            range(
+                max(MIN_OCCUPANCY, po - half_range),
+                min(po + half_range, MAX_OCCUPANCY + 1),
+            )
             if (d + 1) in candidates
             else [occupancy[d + 1]]
         )
 
-        for u in range(max(MIN_OCCUPANCY, po2 - half_range), min(po2 + half_range, MAX_OCCUPANCY + 1)):
+        for u in range(
+            max(MIN_OCCUPANCY, po2 - half_range),
+            min(po2 + half_range, MAX_OCCUPANCY + 1),
+        ):
             if d == (N_DAYS - 1):
                 vs = [u]
             for v in vs:
@@ -147,23 +156,23 @@ def solve(
     half_range,
     family_size,
     penalty_memo,
-    accounting_memo
+    accounting_memo,
 ):
 
-    S = pywraplp.Solver(
-        "SolveAssignmentProblem", solver
-    )
+    S = pywraplp.Solver("SolveAssignmentProblem", solver)
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
-    occupancy = _calc_occupancy(S, x, prediction, daily_occupancy, candidates, family_size)
-    y = _add_accounting_candidates(S, candidates, occupancy, th, daily_occupancy, half_range, accounting_memo)
+    occupancy = _calc_occupancy(
+        S, x, prediction, daily_occupancy, candidates, family_size
+    )
+    y = _add_accounting_candidates(
+        S, candidates, occupancy, th, daily_occupancy, half_range, accounting_memo
+    )
 
     # Objective
     total_cost = _calc_preference_cost(S, x, DESIRED, penalty_memo)
     if 0 < len(y):
-        total_cost += _calc_accounting_cost(
-            S, y, occupancy, accounting_memo
-        )
+        total_cost += _calc_accounting_cost(S, y, occupancy, accounting_memo)
     S.Minimize(total_cost)
 
     # Constraints
@@ -230,7 +239,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             h,
             family_size,
             penalty_memo,
-            accounting_memo
+            accounting_memo,
         )
         for _, row in df.iterrows():
             fam_id = int(row["family_id"])
@@ -249,7 +258,16 @@ def build_init_solver(data):
     def solveSanta(choices=7, accounting_thresh=4096):
         DESIRED = {i: data.values[i, :choices] - 1 for i in range(data.shape[0])}
         df = solve(
-                pywraplp.Solver.GLOP_LINEAR_PROGRAMMING, {}, DESIRED, None, -1, 23, 1e12, family_size, penalty_memo, accounting_memo
+            pywraplp.Solver.GLOP_LINEAR_PROGRAMMING,
+            {},
+            DESIRED,
+            None,
+            -1,
+            23,
+            1e12,
+            family_size,
+            penalty_memo,
+            accounting_memo,
         )
         THRS = 0.999
 
