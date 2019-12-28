@@ -23,7 +23,7 @@ best = np.array(
     [
         int(v)
         for v in io.load_submission(
-            Path("../input/santa2019work/submission_69450.09241465747.csv")
+            Path("../input/santa2019work/submission.csv")
         )["assigned_day"].to_list()
     ],
     dtype=np.int64,
@@ -33,7 +33,7 @@ best_score = score
 print(f"Score0: {score}")
 
 io.save_result(best)
-while i <= 4:
+while i <= 200:
     cur_best = mip(best, daily_occupancy, 15, 15)
     cur_score, cur_daily_occupancy = total_cost(cur_best)
     print(f"Score4: {cur_score}")
