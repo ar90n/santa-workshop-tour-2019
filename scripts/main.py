@@ -16,7 +16,7 @@ total_cost, delta_move_cost, delta_swap_cost = build_cost_function(data)
 greedy_move = build_greedy_move_func(data, delta_move_cost)
 greedy_swap = build_greedy_swap_func(data, delta_swap_cost)
 family_size_lap = build_family_size_lap(data)
-mip = build_mip(data, choices=5, accounting_thresh=512)
+mip = build_mip(data, choices=6, accounting_thresh=1024)
 
 i = 0
 best = np.array(
@@ -33,8 +33,8 @@ best_score = score
 print(f"Score0: {score}")
 
 io.save_result(best)
-while i <= 0:
-    cur_best = mip(best, daily_occupancy, 40, 5)
+while i <= 160:
+    cur_best = mip(best, daily_occupancy, 20, 15)
     cur_score, cur_daily_occupancy = total_cost(cur_best)
     print(f"Score4: {cur_score}")
 
