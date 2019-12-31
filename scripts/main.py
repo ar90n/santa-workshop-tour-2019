@@ -16,7 +16,7 @@ total_cost, delta_move_cost, delta_swap_cost = build_cost_function(data)
 greedy_move = build_greedy_move_func(data, delta_move_cost)
 greedy_swap = build_greedy_swap_func(data, delta_swap_cost)
 family_size_lap = build_family_size_lap(data)
-mip = build_mip(data, choices=6, accounting_thresh=512)
+mip = build_mip(data, choices=7, accounting_thresh=1024)
 
 i = 0
 best = np.array(
