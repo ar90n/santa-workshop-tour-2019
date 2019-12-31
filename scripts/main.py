@@ -34,7 +34,7 @@ print(f"Score0: {score}")
 
 io.save_result(best)
 while i <= 160:
-    cur_best = mip(best, daily_occupancy, 20, 30)
+    cur_best = mip(best, daily_occupancy, 30, 10)
     cur_score, cur_daily_occupancy = total_cost(cur_best)
     print(f"Score4: {cur_score}")
 
