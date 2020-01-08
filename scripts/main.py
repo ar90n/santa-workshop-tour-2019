@@ -13,11 +13,11 @@ import numpy as np
 
 data = io.load_data()
 
-n_threads = os.environ.get('N_THREADS', 2)
-n_adj_days = os.environ.get('N_ADJ_DAYS', 20)
-occ_half_range = os.environ.get('OCC_HALF_RANGE', 10)
-choices = os.environ.get('CHOICES', 5)
-accounting_thresh = os.environ.get('ACCOUNTING_THRESH', 1024)
+n_threads = int(os.environ.get('N_THREADS', 2))
+n_adj_days = int(os.environ.get('N_ADJ_DAYS', 20))
+occ_half_range = int(os.environ.get('OCC_HALF_RANGE', 10))
+choices = int(os.environ.get('CHOICES', 5))
+accounting_thresh = int(os.environ.get('ACCOUNTING_THRESH', 1024))
 
 total_cost, delta_move_cost, delta_swap_cost = build_cost_function(data)
 greedy_move = build_greedy_move_func(data, delta_move_cost)
