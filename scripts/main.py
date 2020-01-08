@@ -1,3 +1,4 @@
+import os
 from santa_workshop_tour_2019 import io
 from santa_workshop_tour_2019.cost import build_cost_function
 from santa_workshop_tour_2019.lap import build_family_size_lap
@@ -12,11 +13,13 @@ import numpy as np
 
 data = io.load_data()
 
+n_threads = os.environ.get('N_THREADS', 2)
+
 total_cost, delta_move_cost, delta_swap_cost = build_cost_function(data)
 greedy_move = build_greedy_move_func(data, delta_move_cost)
 greedy_swap = build_greedy_swap_func(data, delta_swap_cost)
 family_size_lap = build_family_size_lap(data)
-mip = build_mip(data, choices=5, accounting_thresh=1024)
+mip = build_mip(data, choices=5, accounting_thresh=1024, threads=n_threads)
 
 i = 0
 best = np.array(
@@ -34,7 +37,7 @@ print(f"Score0: {score}")
 
 io.save_result(best)
 while i <= 160:
-    cur_best = mip(best, daily_occupancy, 30, 10)
+    cur_best = mip(best, daily_occupancy, 40, 10)
     cur_score, cur_daily_occupancy = total_cost(cur_best)
 
     i += 1

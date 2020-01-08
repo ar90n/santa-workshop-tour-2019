@@ -157,9 +157,12 @@ def solve(
     family_size,
     penalty_memo,
     accounting_memo,
+    threads
 ):
 
     S = pywraplp.Solver("SolveAssignmentProblem", solver)
+
+    S.SetNumThreads(threads)
 
     x, candidates = _add_penalty_candidates(S, DESIRED)
     occupancy = _calc_occupancy(
@@ -190,7 +193,7 @@ def solve(
     return _get_result_df(DESIRED, x)
 
 
-def build_mip(data, choices=-1, accounting_thresh=4096):
+def build_mip(data, choices=-1, accounting_thresh=4096, threads=1):
     family_size = data.n_people.values
     penalty_memo = create_penalty_memo(data)
     accounting_memo = create_accounting_memo()
@@ -240,6 +243,7 @@ def build_mip(data, choices=-1, accounting_thresh=4096):
             family_size,
             penalty_memo,
             accounting_memo,
+            threads,
         )
         for _, row in df.iterrows():
             fam_id = int(row["family_id"])
