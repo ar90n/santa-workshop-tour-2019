@@ -10,6 +10,7 @@ pandas = "^0.25.0"
 numba = "^0.46.0"
 lap = "^0.4.0"
 ortools = "^7.4"
+kkt = "^0.1.4"
 
 [tool.poetry.dev-dependencies]
 python-language-server = "^0.31.1"
